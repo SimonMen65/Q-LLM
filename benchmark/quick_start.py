@@ -6,8 +6,10 @@ import transformers
 from omegaconf import OmegaConf
 from qllm.utils import patch_hf, GreedySearch, patch_model_center
 
-conf = OmegaConf.load("../config/mistral-qllm-repr4-l1k-bs128-topk8-w1.yaml")
+conf = OmegaConf.load("./config/tinyLlama-1.1B.yaml")
 model_path = "mistralai/Mistral-7B-Instruct-v0.2"
+model_path = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+
 
 model = LlamaForCausalLM.from_pretrained(
 	model_path,
