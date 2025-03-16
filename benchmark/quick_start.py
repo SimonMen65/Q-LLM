@@ -27,6 +27,16 @@ text = "Answer the following question:\nWhat is the capital of France?"
 encoded_text = tokenizer.encode(text)
 input_ids = torch.tensor(encoded_text).unsqueeze(0).to("cuda:0")
 
-output = model.generate(input_ids, max_length=200)
-print(output)
+output_ids = model.generate(
+    input_ids=input_ids,
+    max_length=200,
+    do_sample=True,
+    temperature=0.7,
+    top_k=50,
+    eos_token_id=tokenizer.eos_token_id
+)
+
+output_text = tokenizer.decode(output_ids[0], skip_special_tokens=True)
+print("=== MODEL OUTPUT ===")
+print(output_text)
 model.clear()
