@@ -6,7 +6,7 @@ import transformers
 from omegaconf import OmegaConf
 from qllm.utils import patch_hf, GreedySearch, patch_model_center
 
-conf = OmegaConf.load("~/Q-LLM/config/llama3-qllm-repr4-l1k-bs128-topk8-w4.yaml")
+conf = OmegaConf.load("~/Q-LLM/config/mistral-qllm-repr4-l1k-bs128-topk8-w1.yaml")
 model_path = "models/Meta-Llama-3-8B-Instruct"
 
 model = LlamaForCausalLM.from_pretrained(
