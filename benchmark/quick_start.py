@@ -35,6 +35,6 @@ output_ids = model.generate(
     eos_token_id=tokenizer.eos_token_id
 )
 
-output_text = tokenizer.decode(output_ids[0], skip_special_tokens=True)
+output_text = tokenizer.decode(output_ids[0].tolist(), skip_special_tokens=True)
 print("=== MODEL OUTPUT ===")
 print(output_text)
