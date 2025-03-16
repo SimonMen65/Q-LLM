@@ -24,8 +24,7 @@ model = GreedySearch(model, tokenizer)
 
 text = "Answer the following question:\nWhat is the capital of France?"
 
-encoded_text = tokenizer.encode(text)
-input_ids = torch.tensor(encoded_text).unsqueeze(0).to("cuda:0")
+input_ids = tokenizer.encode(text, return_tensors="pt").to("cuda:0")
 
 output_ids = model.generate(
     input_ids=input_ids,
@@ -39,4 +38,3 @@ output_ids = model.generate(
 output_text = tokenizer.decode(output_ids[0], skip_special_tokens=True)
 print("=== MODEL OUTPUT ===")
 print(output_text)
-model.clear()
