@@ -22,7 +22,7 @@ tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True, ad
 model = patch_hf(model, "qllm", conf.model)
 model = GreedySearch(model, tokenizer)
 
-text = "xxx"
+text = "Answer the following question:\nWhat is the capital of France?"
 
 encoded_text = tokenizer.encode(text)
 input_ids = torch.tensor(encoded_text).unsqueeze(0).to("cuda:0")
