@@ -22,7 +22,32 @@ tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True, ad
 model = patch_hf(model, "qllm", conf.model)
 model = GreedySearch(model, tokenizer)
 
-text = "what's interesting about Pittsburgh?"
+text = '''
+You are a helpful assistant. Below is a long document containing multiple paragraphs about different topics including biology, history, space exploration, artificial intelligence, and philosophy. At the end of the document, a question will be asked, and your task is to answer it based only on the relevant parts of the document.
+
+--- Start of Document ---
+
+[Biology]
+Photosynthesis is the process by which green plants and some other organisms use sunlight to synthesize foods from carbon dioxide and water. It generally involves the green pigment chlorophyll and generates oxygen as a by-product. Plants also undergo respiration, where they break down sugar molecules to release energy.
+
+[History]
+The Roman Empire, at its peak, encompassed most of Europe, parts of the Middle East, and North Africa. Julius Caesar played a significant role in its transition from Republic to Empire. The empire eventually declined due to internal conflict, economic troubles, and invasions by barbarian tribes.
+
+[Space Exploration]
+The first successful landing on the Moon occurred in 1969 with NASA's Apollo 11 mission. Neil Armstrong and Buzz Aldrin were the first humans to walk on the lunar surface. Since then, numerous missions have explored Mars, the outer planets, and distant galaxies using telescopes and space probes like Voyager and James Webb.
+
+[Artificial Intelligence]
+Artificial intelligence (AI) is the simulation of human intelligence in machines. AI systems are capable of learning from data, recognizing patterns, and making decisions. Machine learning, deep learning, and reinforcement learning are key areas of modern AI. GPT-based language models are powerful examples of generative AI systems.
+
+[Philosophy]
+Socrates, Plato, and Aristotle are foundational figures in Western philosophy. Socratic questioning promotes critical thinking. Plato's theory of forms and Aristotle's logic have influenced thought for centuries. Eastern philosophy also offers rich traditions, such as Confucian ethics and Buddhist teachings on impermanence and mindfulness.
+
+--- End of Document ---
+
+Now answer this question:
+Which two astronauts walked on the Moon during the Apollo 11 mission, and what year did this event occur?
+
+'''
 
 encoded_text = tokenizer.encode(text)
 input_ids = torch.tensor(encoded_text).unsqueeze(0).to("cuda:0")
