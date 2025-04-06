@@ -6,5 +6,5 @@ datasets = ["narrativeqa", "qasper", "multifieldqa_en", "multifieldqa_zh", "hotp
 
 for dataset in datasets:
     data = load_dataset('THUDM/LongBench', dataset, split='test')
-    data.save_to_disk(f'longbench/{dataset}')
+    data.save_to_disk(f'./benchmark/data/longbench/{dataset}')
 
