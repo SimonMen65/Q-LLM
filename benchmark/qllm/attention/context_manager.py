@@ -2,7 +2,7 @@ import torch
 from typing import Optional, Tuple
 from copy import deepcopy
 from .dot_production_attention import get_multi_stage_dot_production_attention
-from .scorer import MLPScorer
+from .scorer import MLPChunkScorer
 import json 
 
 attention_num = 0
@@ -261,7 +261,6 @@ class ContextManager:
         self.perhead = perhead
         self.question_ids = question_ids
         self.question_weight = question_weight
-        self.mlp_scorer = MLPScorer(input_dim=dim_head * n_local).cuda().eval()
 
 
         global GLOBAL_STREAM
@@ -397,6 +396,7 @@ class ContextManager:
         )
 
         self.initialized = True
+        self.mlp_scorer = MLPChunkScorer(input_dim=dim_head * self.n_local).cuda().eval()
     
 
     # def calc_block_topk(
