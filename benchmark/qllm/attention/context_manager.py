@@ -2,6 +2,7 @@ import torch
 from typing import Optional, Tuple
 from copy import deepcopy
 from .dot_production_attention import get_multi_stage_dot_production_attention
+from .scorer import MLPScorer
 import json 
 
 attention_num = 0
@@ -260,6 +261,8 @@ class ContextManager:
         self.perhead = perhead
         self.question_ids = question_ids
         self.question_weight = question_weight
+        self.mlp_scorer = MLPScorer(input_dim=dim_head * n_local).cuda().eval()
+
 
         global GLOBAL_STREAM
         if self.async_global_stream and GLOBAL_STREAM is None:
@@ -396,26 +399,47 @@ class ContextManager:
         self.initialized = True
     
 
+    # def calc_block_topk(
+    #     self, global_h_q
+    # ):
+    #     if not self._use_chunk_topk:
+    #         # if self.num_global_block <= self.topk:
+    #         #     return [list(range(len(self.global_blocks[0]))) for _ in range(self.num_units)], global_h_q[0]
+
+    #         global_h_q = global_h_q.mean(dim=2, keepdim=False)
+    #         assert global_h_q.shape == (self.num_units, self.unit_size, self.dim_head)
+    #         global_h_q = global_h_q.reshape(self.num_units, self.dim_head * self.unit_size)
+    #         ret = []
+    #         for u in range(self.num_units):
+    #             topk, score = self.block_k[u].get_topk(
+    #                 global_h_q[u], self.topk if self.topk < self.num_global_block else self.num_global_block)
+    #             ret.append(topk)
+        
+    #     else:
+    #         return self._cached_topk[self._topk_cur]
+
+    #     return ret, score
+    
     def calc_block_topk(
         self, global_h_q
     ):
         if not self._use_chunk_topk:
-            # if self.num_global_block <= self.topk:
-            #     return [list(range(len(self.global_blocks[0]))) for _ in range(self.num_units)], global_h_q[0]
-
             global_h_q = global_h_q.mean(dim=2, keepdim=False)
             assert global_h_q.shape == (self.num_units, self.unit_size, self.dim_head)
             global_h_q = global_h_q.reshape(self.num_units, self.dim_head * self.unit_size)
             ret = []
             for u in range(self.num_units):
-                topk, score = self.block_k[u].get_topk(
-                    global_h_q[u], self.topk if self.topk < self.num_global_block else self.num_global_block)
+                # === REPLACE DEFAULT INNER PRODUCT SCORING WITH MLP ===
+                # default: topk, score = self.block_k[u].get_topk(global_h_q[u], ...)
+                x = self.block_k[u].get_data()  # shape: (N_blocks, D)
+                q = global_h_q[u].unsqueeze(0).expand(x.size(0), -1)  # shape: (N_blocks, D)
+                score = self.mlp_scorer(q, x)  # shape: (N_blocks,)
+                topk = torch.topk(score, k=min(self.topk, score.size(0)), dim=0).indices.cpu().tolist()
                 ret.append(topk)
-        
         else:
             return self._cached_topk[self._topk_cur]
 
-        return ret, score
+        return ret, score.detach().cpu().tolist()
 
 
     def get_global_hidden_and_mask(
