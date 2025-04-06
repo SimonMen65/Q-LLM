@@ -25,18 +25,23 @@ if __name__ == "__main__":
         )
 
         lines = []
-        for rank in range(args.world_size):
-            file_path = out_path + f"_{rank}"
-            if not os.path.exists(file_path):
-                continue
-            f = open(file_path, "r")
-            lines += f.readlines()
-            f.close()
 
-        # if dataset not in ['math_find']:
-        #     lines = set([l.strip() for l in lines])
-        # else:
-        lines = [l.strip() for l in lines]
+        if args.world_size == 1:
+            # world_size=1 直接读取 out_path 自己
+            if os.path.exists(out_path):
+                with open(out_path, "r") as f:
+                    lines = [l.strip() for l in f.readlines()]
+            print(f"single world\n")
+        else:
+            # world_size>1 拼接多个 _0 _1 _2
+            for rank in range(args.world_size):
+                file_path = out_path + f"_{rank}"
+                if not os.path.exists(file_path):
+                    continue
+                with open(file_path, "r") as f:
+                    lines += f.readlines()
+            lines = [l.strip() for l in lines]
+
         f = open(out_path, "w+")
         f.write(
             "\n".join(lines)
@@ -57,6 +62,8 @@ if __name__ == "__main__":
             data = load_from_disk(
                 f"benchmark/data/longbench/{dataset}"
             )
+            data = data.select(range(3))
+            
 
         if len(lines) == len(data):
             print(f'{dataset} completed')

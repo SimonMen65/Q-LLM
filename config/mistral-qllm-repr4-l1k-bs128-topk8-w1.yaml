@@ -1,6 +1,6 @@
 model:
   type: qllm
-  path: ./models/Mistral-7B-Instruct-v0.2
+  path: mistralai/Mistral-7B-Instruct-v0.3
   block_size: 128
   n_init: 128
   n_local: 1024

@@ -10,10 +10,6 @@ fi
 
 eval set -- "$PARSED"
 
-world_size=1
-datasets=passkey,number_string,code_debug,math_find,longbook_choice_eng
-output_dir_path=benchmark/benchmark-result
-
 while true; do
     case "$1" in
         -h|--help)
@@ -54,7 +50,8 @@ trap 'kill $(jobs -p)' SIGINT
 
 for ((rank=0; rank < $world_size; ++rank))
 do
-    CUDA_VISIBLE_DEVICES=${rank} python benchmark/pred.py \
+    CUDA_VISIBLE_DEVICES=${rank} python benchmark/pred.py --verbose \
+    --num_samples 4 \
     --config_path ${config_path} \
     --output_dir_path ${output_dir_path} \
     --datasets ${datasets} \
@@ -65,9 +62,9 @@ done
 
 wait
 
-python benchmark/merge.py \
-    --output_dir_path ${output_dir_path} \
-    --datasets ${datasets} \
-    --world_size ${world_size}
+# python benchmark/merge.py \
+#     --output_dir_path ${output_dir_path} \
+#     --datasets ${datasets} \
+#     --world_size ${world_size} \
 
 python benchmark/eval.py --dir_path ${output_dir_path}

@@ -23,6 +23,7 @@ def parse_args():
     parser.add_argument("--rank", type=int, default=None)
     parser.add_argument("--world_size", type=int, default=None)
     parser.add_argument("--verbose", action="store_true")
+    parser.add_argument("--num_samples", type=int, default=None, help="number of samples to run per dataset")
     args, extra_args = parser.parse_known_args()
     conf = OmegaConf.load(args.config_path)
     cli_conf = OmegaConf.from_cli(extra_args)
@@ -35,6 +36,7 @@ def parse_args():
     conf.rank = args.rank
     conf.world_size = args.world_size
     conf.verbose = args.verbose
+    conf.num_samples = args.num_samples
     if not hasattr(conf.model, "tokenizer_path"):
         conf.model.tokenizer_path = conf.model.path
     if not hasattr(conf, "truncation"):
@@ -236,6 +238,7 @@ def get_pred(
         #     f.write('\n'.join(past_data))
 
     for json_obj in tqdm(data[start_id:]):
+        #print(f"[QLLM pred] Predicting sample: {json_obj}")
         prompt = prompt_format.format(**json_obj)
 
         extra_end_token_ids = []
@@ -367,6 +370,9 @@ if __name__ == '__main__':
             data = load_from_disk(
                 f"benchmark/data/longbench/{dataset}"
             )
+        if args.num_samples is not None:
+            data = data.select(range(args.num_samples))
+
 
         out_path = os.path.join(
             output_dir_path,
