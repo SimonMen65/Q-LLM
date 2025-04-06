@@ -1,7 +1,7 @@
 datasets='narrativeqa,qasper,multifieldqa_en,hotpotqa,2wikimqa,musique,gov_report,qmsum,multi_news,trec,triviaqa,samsum,passage_count,passage_retrieval_en,lcc,repobench-p' # long bench
 world_size=8
 
-config=$1 # set your config
+config=llama3-qllm-repr4-l1k-bs128-topk8-w4 # set your config
 config_path=config/$config.yaml
 output_dir_path=result/longbench/$config
 
