@@ -1,18 +1,10 @@
-# save_narrativeqa_dataset.py
-from datasets import Dataset
-import os
+from datasets import load_dataset
 
-data = [
-    {
-        "id": "narrativeqa-test-1",
-        "question": "Who wrote the Harry Potter series?",
-        "context": "J.K. Rowling is a British author best known for writing the Harry Potter books.",
-        "answer": "J.K. Rowling",
-    }
-]
+datasets = ["narrativeqa", "qasper", "multifieldqa_en", "multifieldqa_zh", "hotpotqa", "2wikimqa", "musique",
+            "dureader", "gov_report", "qmsum", "multi_news", "vcsum", "trec", "triviaqa", "samsum", "lsht",
+            "passage_count", "passage_retrieval_en", "passage_retrieval_zh", "lcc", "repobench-p"]
 
-ds = Dataset.from_list(data)
+for dataset in datasets:
+    data = load_dataset('THUDM/LongBench', dataset, split='test')
+    data.save_to_disk(f'longbench/{dataset}')
 
-output_path = "./benchmark/data/longbench/narrativeqa"
-os.makedirs(output_path, exist_ok=True)
-ds.save_to_disk(output_path)
