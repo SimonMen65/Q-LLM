@@ -2,7 +2,7 @@
 datasets='gov_report'
 world_size=2
 
-config=mistral-qllm-repr4-l1k-bs128-topk8-w1 # set your config
+config=llama3-qllm-repr4-l1k-bs128-topk8-w4
 config_path=config/$config.yaml
 output_dir_path=result/longbench/$config
 
