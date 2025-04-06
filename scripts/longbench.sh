@@ -1,6 +1,6 @@
 # datasets='narrativeqa,qasper,multifieldqa_en,hotpotqa,2wikimqa,musique,gov_report,qmsum,multi_news,trec,triviaqa,samsum,passage_count,passage_retrieval_en,lcc,repobench-p' # long bench
 datasets='gov_report'
-world_size=1
+world_size=2
 
 config=mistral-qllm-repr4-l1k-bs128-topk8-w1 # set your config
 config_path=config/$config.yaml
