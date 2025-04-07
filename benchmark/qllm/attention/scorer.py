@@ -3,10 +3,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class MLPChunkScorer(nn.Module):
-    def __init__(self, dim, hidden_dim=128):
+    def __init__(self, input_dim, hidden_dim=128):
         super().__init__()
         self.scorer = nn.Sequential(
-            nn.Linear(dim * 2, hidden_dim),
+            nn.Linear(input_dim * 2, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, 1)
         )
