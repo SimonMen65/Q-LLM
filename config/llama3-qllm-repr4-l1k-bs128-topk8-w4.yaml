@@ -1,6 +1,6 @@
 model:
   type: qllm
-  path: meta-llama/Llama-3.2-1B
+  path: meta-llama/Llama-3.2-1B-Instruct
   block_size: 128
   n_init: 128
   n_local: 1024
