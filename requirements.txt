@@ -4,3 +4,9 @@ einops
 tensor
 omegaconf
 torch
+accelerate
+transformers
+jieba
+datasets
+fuzzywuzzy
+rouge
