@@ -13,6 +13,28 @@ from qllm.utils import patch_hf, GreedySearch, patch_model_center
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from qllm.utils.extract_question import extract_question_id
 import time 
+import nltk
+nltk.download('punkt')  # 第一次运行下载 tokenizer
+from nltk.tokenize import sent_tokenize
+
+def filter_context(text):
+    sentences = sent_tokenize(text)
+    filtered = []
+
+    for s in sentences:
+        s_lower = s.lower()
+        # 1. 去掉太短的句子
+        if len(s.split()) < 5:
+            continue
+        # 2. 保留包含谓词/动词的句子（可扩展）
+        if not any(v in s_lower for v in ["is", "are", "was", "were", "has", "have", "can", "could", "will", "shall", "must"]):
+            continue
+        # 3. 可选：如果是特殊任务，保留 question or answer hint
+        filtered.append(s)
+
+    # 4. 拼接
+    return " ".join(filtered)
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -226,7 +248,7 @@ def get_pred(
     cur = 0
     total = len(data)
 
-    start_id = 0
+    start_id = 190
     if os.path.exists(out_path):
         with open(out_path) as f:
             past_data = [l.strip() for l in f.readlines()]
@@ -236,6 +258,10 @@ def get_pred(
         #     f.write('\n'.join(past_data))
 
     for json_obj in tqdm(data[start_id:]):
+        if dataset in ["gov_report", "longbook_sum_eng", "longbook_qa_eng"]:  
+            json_obj["context"] = filter_context(json_obj["context"])
+            print("context is filtered")
+    
         prompt = prompt_format.format(**json_obj)
 
         extra_end_token_ids = []
