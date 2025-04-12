@@ -236,6 +236,9 @@ def get_pred(
         start_id = len(past_data)
         # with open(out_path, "w+") as f:
         #     f.write('\n'.join(past_data))
+    
+    total_token_count = 0
+    total_run_time = 0.0
 
     for json_obj in tqdm(data[start_id:]):
         #print(f"[QLLM pred] Predicting sample: {json_obj}")
@@ -309,6 +312,8 @@ def get_pred(
             )
         run_time = time.time() - start_time
         result = post_process(output[0], model_name)
+        total_run_time += run_time
+        total_token_count += len(tokenized_prompt) + output[0].size(0)
         pred = {
             "pred": result, "answers": json_obj["answers"], "all_classes": json_obj["all_classes"], "length": json_obj["length"], "token_length": len(tokenized_prompt) + max_gen, 'time': run_time,
         }
@@ -325,7 +330,9 @@ def get_pred(
             json.dump(pred, f, ensure_ascii=False)
             f.write('\n')
         # import pdb;pdb.set_trace()
-        
+    
+    throughput = total_token_count / total_run_time if total_run_time > 0 else 0
+    print(f"[Throughput] total_tokens={total_token_count}, total_time={total_run_time:.2f}s, throughput={throughput:.2f} tokens/s")
     return preds
 
 
