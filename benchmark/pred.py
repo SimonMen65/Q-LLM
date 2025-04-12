@@ -312,7 +312,7 @@ def get_pred(
             )
         run_time = time.time() - start_time
         total_run_time += run_time
-        total_token_count += len(tokenized_prompt) + output[0].size(0)
+        total_token_count += len(tokenized_prompt) + len(output[0])
         result = post_process(output[0], model_name)
         pred = {
             "pred": result, "answers": json_obj["answers"], "all_classes": json_obj["all_classes"], "length": json_obj["length"], "token_length": len(tokenized_prompt) + max_gen, 'time': run_time,
