@@ -6,6 +6,7 @@ import json
 import time
 
 attention_num = 0
+from utils.profiler import log
 
 class CudaCache:
     def __init__(self, num_units, unit_size, dtype):
@@ -293,7 +294,7 @@ class ContextManager:
                 self.global_blocks[u][idx].offload()
                 self.cached_blocks[u].pop(idx)
                 end = time.time()
-                print(f"[Offload] block id={idx} time={end-start:.3f}s")
+                log(f"[Offload] block id={idx} time={end-start:.3f}s")
                 removed += 1
 
             if removed >= num_remove:
@@ -458,7 +459,7 @@ class ContextManager:
                 start = time.time()
                 self.global_blocks[u][b_idx].load((global_h_k[u, :, st:ed, :], global_h_v[u, :, st:ed, :]))
                 end = time.time()
-                print(f"[Load] block id={b_idx} time={end-start:.3f}s")
+                log(f"[Load] block id={b_idx} time={end-start:.3f}s")
 
              
         init_st = block_num * self.block_size
@@ -523,14 +524,16 @@ class ContextManager:
 
 
         # calc local result first to overlap host-device communication
+        torch.cuda.synchronize()
         start = time.time()
         attn = self.Attn(local_h_q.shape, local_h_q.dtype, local_h_q.device)
         attn.append(
             local_h_q, local_h_k, local_h_v, 
             get_score=True, sliding_window=self.n_local
         )
+        torch.cuda.synchronize()
         end = time.time()
-        print(f"[local Compute] time={end-start:.3f}s")
+        log(f"[local Compute] time={end-start:.3f}s")
 
         # calc topk global repr k and load cache
         with torch.cuda.stream(GLOBAL_STREAM):
@@ -567,6 +570,7 @@ class ContextManager:
             torch.cuda.current_stream().wait_stream(GLOBAL_STREAM)
 
         # calc global result
+        torch.cuda.synchronize()
         start = time.time()
         attn.append(
             global_h_q, global_h_k, global_h_v, 
@@ -576,8 +580,9 @@ class ContextManager:
         )
 
         o, score_list = attn.get_result()
+        torch.cuda.synchronize()
         end = time.time()
-        print(f"[global Compute] time={end-start:.3f}s")
+        log(f"[global Compute] time={end-start:.3f}s")
 
         loc_score = score_list[0]
         glb_score = score_list[1]
