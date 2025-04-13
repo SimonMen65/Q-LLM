@@ -417,7 +417,7 @@ class ContextManager:
 
         return ret, score
 
-'''
+    '''
     def get_global_hidden_and_mask(
         self, len_q, block_topk
     ):
@@ -483,8 +483,8 @@ class ContextManager:
 
         global_h_k = global_h_k[:, :, :ed, :]
         global_h_v = global_h_v[:, :, :ed, :]
-        return global_h_k, global_h_v, sliding_window, global_block_map, block_num
-'''
+        return global_h_k, global_h_v, sliding_window, global_block_map, block_num'''
+
     def get_global_hidden_and_mask(
         self, len_q, block_topk
     ):
