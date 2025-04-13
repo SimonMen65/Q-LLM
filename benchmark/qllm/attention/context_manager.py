@@ -3,10 +3,8 @@ from typing import Optional, Tuple
 from copy import deepcopy
 from .dot_production_attention import get_multi_stage_dot_production_attention
 import json 
-import time
 
 attention_num = 0
-from ..utils.profiler import log
 
 class CudaCache:
     def __init__(self, num_units, unit_size, dtype):
@@ -290,11 +288,8 @@ class ContextManager:
         for i in range(len(lst)):
             idx = lst[i][0]
             if ignore_blocks is None or (idx not in ignore_blocks):
-                start = time.time()
                 self.global_blocks[u][idx].offload()
                 self.cached_blocks[u].pop(idx)
-                end = time.time()
-                log(f"[Offload] block id={idx} time={end-start:.3f}s")
                 removed += 1
 
             if removed >= num_remove:
@@ -456,10 +451,7 @@ class ContextManager:
 
                 
                 assert b_idx in self.cached_blocks[u]
-                start = time.time()
                 self.global_blocks[u][b_idx].load((global_h_k[u, :, st:ed, :], global_h_v[u, :, st:ed, :]))
-                end = time.time()
-                log(f"[Load] block id={b_idx} time={end-start:.3f}s")
 
              
         init_st = block_num * self.block_size
@@ -524,16 +516,11 @@ class ContextManager:
 
 
         # calc local result first to overlap host-device communication
-        stream = torch.cuda.current_stream()
-        start_event = torch.cuda.Event(enable_timing=True)
-        end_event = torch.cuda.Event(enable_timing=True)
-        start_event.record(stream)
         attn = self.Attn(local_h_q.shape, local_h_q.dtype, local_h_q.device)
         attn.append(
             local_h_q, local_h_k, local_h_v, 
             get_score=True, sliding_window=self.n_local
         )
-
 
         # calc topk global repr k and load cache
         with torch.cuda.stream(GLOBAL_STREAM):
@@ -578,11 +565,6 @@ class ContextManager:
         )
 
         o, score_list = attn.get_result()
-        end_event.record(stream)
-        stream.synchronize()
-        elapsed_time_ms = start_event.elapsed_time(end_event)  # 单位 ms
-        log(f"[local Compute] time={elapsed_time_ms/1000:.3f}s")
-
         loc_score = score_list[0]
         glb_score = score_list[1]
 
