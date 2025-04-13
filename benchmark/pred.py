@@ -219,7 +219,7 @@ def get_pred(
     verbose: bool = False, out_path: str = None,
     model_type: str = None,
 ):
-        with torch.profiler.profile(
+    with torch.profiler.profile(
         activities=[
             torch.profiler.ProfilerActivity.CPU,
             torch.profiler.ProfilerActivity.CUDA,
