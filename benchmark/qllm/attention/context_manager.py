@@ -533,11 +533,7 @@ class ContextManager:
             local_h_q, local_h_k, local_h_v, 
             get_score=True, sliding_window=self.n_local
         )
-        torch.cuda.synchronize()
-        end_event.record(stream)
-        stream.synchronize()
-        elapsed_time_ms = start_event.elapsed_time(end_event)  # 单位 ms
-        log(f"[local Compute] time={elapsed_time_ms/1000:.3f}s")
+
 
         # calc topk global repr k and load cache
         with torch.cuda.stream(GLOBAL_STREAM):
@@ -582,6 +578,10 @@ class ContextManager:
         )
 
         o, score_list = attn.get_result()
+        end_event.record(stream)
+        stream.synchronize()
+        elapsed_time_ms = start_event.elapsed_time(end_event)  # 单位 ms
+        log(f"[local Compute] time={elapsed_time_ms/1000:.3f}s")
 
         loc_score = score_list[0]
         glb_score = score_list[1]
