@@ -1,6 +1,6 @@
 model:
   type: qllm
-  path: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+  path: meta-llama/Meta-Llama-3-8B-Instruct
   block_size: 64
   n_init: 64
   n_local: 512

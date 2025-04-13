@@ -219,133 +219,123 @@ def get_pred(
     verbose: bool = False, out_path: str = None,
     model_type: str = None,
 ):
+
+    preds = []
+    data = list(data)
+
+    if world_size is not None:
+        data = data[rank::world_size]
+
+    searcher = GreedySearch(model, tokenizer)
+    cur = 0
+    total = len(data)
+
+    start_id = 0
+    if os.path.exists(out_path):
+        with open(out_path) as f:
+            past_data = [l.strip() for l in f.readlines()]
+        past_data = set(past_data)
+        start_id = len(past_data)
+        # with open(out_path, "w+") as f:
+        #     f.write('\n'.join(past_data))
     
-    with torch.profiler.profile(
-        activities=[torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA],
-        schedule=torch.profiler.schedule(wait=0, warmup=0, active=1),
-        on_trace_ready=torch.profiler.tensorboard_trace_handler('./log/trace'),
-        record_shapes=True,
-        profile_memory=True,
-        with_stack=True,
-    ) as prof:
+    total_token_count = 0
+    total_run_time = 0.0
 
-        preds = []
-        data = list(data)
+    for json_obj in tqdm(data[start_id:]):
+        #print(f"[QLLM pred] Predicting sample: {json_obj}")
+        prompt = prompt_format.format(**json_obj)
 
-        if world_size is not None:
-            data = data[rank::world_size]
+        extra_end_token_ids = []
+        if model_name == "llama-3-inst":
+            extra_end_token_ids.append(tokenizer.encode("<|eot_id|>", add_special_tokens=False)[0])
 
-        searcher = GreedySearch(model, tokenizer)
-        cur = 0
-        total = len(data)
+        if model_name == "qwen":
+            extra_end_token_ids.append(tokenizer.encode("<|im_end|>", add_special_tokens=False)[0])
 
-        start_id = 0
-        if os.path.exists(out_path):
-            with open(out_path) as f:
-                past_data = [l.strip() for l in f.readlines()]
-            past_data = set(past_data)
-            start_id = len(past_data)
-            # with open(out_path, "w+") as f:
-            #     f.write('\n'.join(past_data))
-        
-        total_token_count = 0
-        total_run_time = 0.0
-
-        for json_obj in tqdm(data[start_id:]):
-            #print(f"[QLLM pred] Predicting sample: {json_obj}")
-            prompt = prompt_format.format(**json_obj)
-
-            extra_end_token_ids = []
-            if model_name == "llama-3-inst":
-                extra_end_token_ids.append(tokenizer.encode("<|eot_id|>", add_special_tokens=False)[0])
-
-            if model_name == "qwen":
-                extra_end_token_ids.append(tokenizer.encode("<|im_end|>", add_special_tokens=False)[0])
-
-            if dataset == "samsum":
-                extra_end_token_ids.append(tokenizer.encode("\n", add_special_tokens=False)[-1])
+        if dataset == "samsum":
+            extra_end_token_ids.append(tokenizer.encode("\n", add_special_tokens=False)[-1])
 
 
-            if dataset not in ["trec", "triviaqa", "samsum", "lsht", "lcc", "repobench-p"]: 
-                # chat models are better off without build prompts on these tasks
-                prompt = build_chat(tokenizer, prompt, model_name)
+        if dataset not in ["trec", "triviaqa", "samsum", "lsht", "lcc", "repobench-p"]: 
+            # chat models are better off without build prompts on these tasks
+            prompt = build_chat(tokenizer, prompt, model_name)
 
-                if model_name.strip().lower() in ['mistral-inst']:
-                    add_special_tokens = False
-                else:
-                    add_special_tokens = True
-            
+            if model_name.strip().lower() in ['mistral-inst']:
+                add_special_tokens = False
             else:
                 add_special_tokens = True
+        
+        else:
+            add_special_tokens = True
 
-            tokenized_prompt = tokenizer(prompt, truncation=False, return_tensors="pt", add_special_tokens=add_special_tokens).input_ids[0]
+        tokenized_prompt = tokenizer(prompt, truncation=False, return_tensors="pt", add_special_tokens=add_special_tokens).input_ids[0]
 
-            if truncation is None:
-                if len(tokenized_prompt) > max_length - max_gen:
+        if truncation is None:
+            if len(tokenized_prompt) > max_length - max_gen:
+                if verbose:
+                    print(f"Length {len(tokenized_prompt)}. Skipped.")
+                continue
+
+        else:
+            if truncation == "suffix":
+                length = len(tokenized_prompt)
+                if length > max_length - max_gen:
                     if verbose:
-                        print(f"Length {len(tokenized_prompt)}. Skipped.")
-                    continue
-
+                        print("over length")
+                    init_token_num = 128
+                    prompt = tokenizer.decode(tokenized_prompt[:init_token_num].tolist() + tokenized_prompt[- (max_length - max_gen - init_token_num):].tolist())
+                    tokenized_prompt = tokenizer(prompt, truncation=False, return_tensors="pt", add_special_tokens=add_special_tokens).input_ids[0]
             else:
-                if truncation == "suffix":
-                    length = len(tokenized_prompt)
-                    if length > max_length - max_gen:
-                        if verbose:
-                            print("over length")
-                        init_token_num = 128
-                        prompt = tokenizer.decode(tokenized_prompt[:init_token_num].tolist() + tokenized_prompt[- (max_length - max_gen - init_token_num):].tolist())
-                        tokenized_prompt = tokenizer(prompt, truncation=False, return_tensors="pt", add_special_tokens=add_special_tokens).input_ids[0]
-                else:
-                    raise NotImplementedError
-        
-            kwargs = {}
-            if model_type in ['qllm']:
-                kwargs["question_ids"] = extract_question_id(
-                    dataset, tokenizer, tokenized_prompt, json_obj)
-                
-            start_time = time.time()
-            if dataset == "samsum":
-                output = searcher.generate(
-                    input_ids = tokenized_prompt,
-                    max_length=max_gen,
-                    extra_end_token_ids=[
-                        tokenizer.encode("\n", add_special_tokens=False)[-1],
-                    ],
-                    chunk_size=gen_chunk_size,
-                    **kwargs,
-                )
-            else:
-                output = searcher.generate(
-                    input_ids = tokenized_prompt,
-                    max_length=max_gen,
-                    chunk_size=gen_chunk_size,
-                    **kwargs,
-                )
-            run_time = time.time() - start_time
-            total_run_time += run_time
-            total_token_count += len(tokenized_prompt) + len(output[0])
-            result = post_process(output[0], model_name)
-            pred = {
-                "pred": result, "answers": json_obj["answers"], "all_classes": json_obj["all_classes"], "length": json_obj["length"], "token_length": len(tokenized_prompt) + max_gen, 'time': run_time,
-            }
-            searcher.clear()
-            cur += 1
-            if verbose:
-                print(f"----------{cur}/{total}----------")
-                print("Question:", prompt[-100:])
-                print("Pred:", result)
-                print("Answer:", json_obj["answers"])
-                print("")
+                raise NotImplementedError
+    
+        kwargs = {}
+        if model_type in ['qllm']:
+            kwargs["question_ids"] = extract_question_id(
+                dataset, tokenizer, tokenized_prompt, json_obj)
+            
+        start_time = time.time()
+        if dataset == "samsum":
+            output = searcher.generate(
+                input_ids = tokenized_prompt,
+                max_length=max_gen,
+                extra_end_token_ids=[
+                    tokenizer.encode("\n", add_special_tokens=False)[-1],
+                ],
+                chunk_size=gen_chunk_size,
+                **kwargs,
+            )
+        else:
+            output = searcher.generate(
+                input_ids = tokenized_prompt,
+                max_length=max_gen,
+                chunk_size=gen_chunk_size,
+                **kwargs,
+            )
+        run_time = time.time() - start_time
+        total_run_time += run_time
+        total_token_count += len(tokenized_prompt) + len(output[0])
+        result = post_process(output[0], model_name)
+        pred = {
+            "pred": result, "answers": json_obj["answers"], "all_classes": json_obj["all_classes"], "length": json_obj["length"], "token_length": len(tokenized_prompt) + max_gen, 'time': run_time,
+        }
+        searcher.clear()
+        cur += 1
+        if verbose:
+            print(f"----------{cur}/{total}----------")
+            print("Question:", prompt[-100:])
+            print("Pred:", result)
+            print("Answer:", json_obj["answers"])
+            print("")
 
-            with open(out_path, "a", encoding="utf-8") as f:
-                json.dump(pred, f, ensure_ascii=False)
-                f.write('\n')
-            # import pdb;pdb.set_trace()
-            prof.step()
-        
-        throughput = total_token_count / total_run_time if total_run_time > 0 else 0
-        print(f"[Throughput] total_tokens={total_token_count}, total_time={total_run_time:.2f}s, throughput={throughput:.2f} tokens/s")
-        return preds
+        with open(out_path, "a", encoding="utf-8") as f:
+            json.dump(pred, f, ensure_ascii=False)
+            f.write('\n')
+        # import pdb;pdb.set_trace()
+    
+    throughput = total_token_count / total_run_time if total_run_time > 0 else 0
+    print(f"[Throughput] total_tokens={total_token_count}, total_time={total_run_time:.2f}s, throughput={throughput:.2f} tokens/s")
+    return preds
 
 
 if __name__ == '__main__':
