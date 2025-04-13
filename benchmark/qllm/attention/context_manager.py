@@ -6,7 +6,7 @@ import json
 import time
 
 attention_num = 0
-from utils.profiler import log
+from ..utils.profiler import log
 
 class CudaCache:
     def __init__(self, num_units, unit_size, dtype):
