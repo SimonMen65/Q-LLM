@@ -344,6 +344,8 @@ if __name__ == '__main__':
     # define your model
     model, tokenizer = get_model_and_tokenizer(args.model, args.conv_type)
     output_dir_path = args.output_dir_path
+    torch.cuda.reset_peak_memory_stats()
+    torch.cuda.empty_cache()
 
     datasets = args.datasets
 
