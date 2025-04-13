@@ -15,7 +15,7 @@ echo "============ START PRED ============"
 
 for ((rank=0; rank < $world_size; ++rank))
 do
-    CUDA_VISIBLE_DEVICES=${rank} python benchmark/pred.py --verbose \
+    CUDA_VISIBLE_DEVICES=${rank} python benchmark/pred.py \
     --num_samples 4 \
     --config_path ${config_path} \
     --output_dir_path ${output_dir_path} \
