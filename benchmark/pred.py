@@ -359,6 +359,7 @@ if __name__ == '__main__':
     if multiprocessing:
         assert args.rank in list(range(args.world_size))
 
+    os.makedirs('./log/trace', exist_ok=True)
     with torch.profiler.profile(
         activities=[
             torch.profiler.ProfilerActivity.CPU,
