@@ -219,123 +219,133 @@ def get_pred(
     verbose: bool = False, out_path: str = None,
     model_type: str = None,
 ):
-
-    preds = []
-    data = list(data)
-
-    if world_size is not None:
-        data = data[rank::world_size]
-
-    searcher = GreedySearch(model, tokenizer)
-    cur = 0
-    total = len(data)
-
-    start_id = 0
-    if os.path.exists(out_path):
-        with open(out_path) as f:
-            past_data = [l.strip() for l in f.readlines()]
-        past_data = set(past_data)
-        start_id = len(past_data)
-        # with open(out_path, "w+") as f:
-        #     f.write('\n'.join(past_data))
     
-    total_token_count = 0
-    total_run_time = 0.0
+    with torch.profiler.profile(
+        activities=[torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA],
+        schedule=torch.profiler.schedule(wait=1, warmup=1, active=5),
+        on_trace_ready=torch.profiler.tensorboard_trace_handler('./log/trace'),
+        record_shapes=True,
+        profile_memory=True,
+        with_stack=True,
+    ) as prof:
 
-    for json_obj in tqdm(data[start_id:]):
-        #print(f"[QLLM pred] Predicting sample: {json_obj}")
-        prompt = prompt_format.format(**json_obj)
+        preds = []
+        data = list(data)
 
-        extra_end_token_ids = []
-        if model_name == "llama-3-inst":
-            extra_end_token_ids.append(tokenizer.encode("<|eot_id|>", add_special_tokens=False)[0])
+        if world_size is not None:
+            data = data[rank::world_size]
 
-        if model_name == "qwen":
-            extra_end_token_ids.append(tokenizer.encode("<|im_end|>", add_special_tokens=False)[0])
+        searcher = GreedySearch(model, tokenizer)
+        cur = 0
+        total = len(data)
 
-        if dataset == "samsum":
-            extra_end_token_ids.append(tokenizer.encode("\n", add_special_tokens=False)[-1])
+        start_id = 0
+        if os.path.exists(out_path):
+            with open(out_path) as f:
+                past_data = [l.strip() for l in f.readlines()]
+            past_data = set(past_data)
+            start_id = len(past_data)
+            # with open(out_path, "w+") as f:
+            #     f.write('\n'.join(past_data))
+        
+        total_token_count = 0
+        total_run_time = 0.0
+
+        for json_obj in tqdm(data[start_id:]):
+            #print(f"[QLLM pred] Predicting sample: {json_obj}")
+            prompt = prompt_format.format(**json_obj)
+
+            extra_end_token_ids = []
+            if model_name == "llama-3-inst":
+                extra_end_token_ids.append(tokenizer.encode("<|eot_id|>", add_special_tokens=False)[0])
+
+            if model_name == "qwen":
+                extra_end_token_ids.append(tokenizer.encode("<|im_end|>", add_special_tokens=False)[0])
+
+            if dataset == "samsum":
+                extra_end_token_ids.append(tokenizer.encode("\n", add_special_tokens=False)[-1])
 
 
-        if dataset not in ["trec", "triviaqa", "samsum", "lsht", "lcc", "repobench-p"]: 
-            # chat models are better off without build prompts on these tasks
-            prompt = build_chat(tokenizer, prompt, model_name)
+            if dataset not in ["trec", "triviaqa", "samsum", "lsht", "lcc", "repobench-p"]: 
+                # chat models are better off without build prompts on these tasks
+                prompt = build_chat(tokenizer, prompt, model_name)
 
-            if model_name.strip().lower() in ['mistral-inst']:
-                add_special_tokens = False
+                if model_name.strip().lower() in ['mistral-inst']:
+                    add_special_tokens = False
+                else:
+                    add_special_tokens = True
+            
             else:
                 add_special_tokens = True
-        
-        else:
-            add_special_tokens = True
 
-        tokenized_prompt = tokenizer(prompt, truncation=False, return_tensors="pt", add_special_tokens=add_special_tokens).input_ids[0]
+            tokenized_prompt = tokenizer(prompt, truncation=False, return_tensors="pt", add_special_tokens=add_special_tokens).input_ids[0]
 
-        if truncation is None:
-            if len(tokenized_prompt) > max_length - max_gen:
-                if verbose:
-                    print(f"Length {len(tokenized_prompt)}. Skipped.")
-                continue
-
-        else:
-            if truncation == "suffix":
-                length = len(tokenized_prompt)
-                if length > max_length - max_gen:
+            if truncation is None:
+                if len(tokenized_prompt) > max_length - max_gen:
                     if verbose:
-                        print("over length")
-                    init_token_num = 128
-                    prompt = tokenizer.decode(tokenized_prompt[:init_token_num].tolist() + tokenized_prompt[- (max_length - max_gen - init_token_num):].tolist())
-                    tokenized_prompt = tokenizer(prompt, truncation=False, return_tensors="pt", add_special_tokens=add_special_tokens).input_ids[0]
-            else:
-                raise NotImplementedError
-    
-        kwargs = {}
-        if model_type in ['qllm']:
-            kwargs["question_ids"] = extract_question_id(
-                dataset, tokenizer, tokenized_prompt, json_obj)
-            
-        start_time = time.time()
-        if dataset == "samsum":
-            output = searcher.generate(
-                input_ids = tokenized_prompt,
-                max_length=max_gen,
-                extra_end_token_ids=[
-                    tokenizer.encode("\n", add_special_tokens=False)[-1],
-                ],
-                chunk_size=gen_chunk_size,
-                **kwargs,
-            )
-        else:
-            output = searcher.generate(
-                input_ids = tokenized_prompt,
-                max_length=max_gen,
-                chunk_size=gen_chunk_size,
-                **kwargs,
-            )
-        run_time = time.time() - start_time
-        total_run_time += run_time
-        total_token_count += len(tokenized_prompt) + len(output[0])
-        result = post_process(output[0], model_name)
-        pred = {
-            "pred": result, "answers": json_obj["answers"], "all_classes": json_obj["all_classes"], "length": json_obj["length"], "token_length": len(tokenized_prompt) + max_gen, 'time': run_time,
-        }
-        searcher.clear()
-        cur += 1
-        if verbose:
-            print(f"----------{cur}/{total}----------")
-            print("Question:", prompt[-100:])
-            print("Pred:", result)
-            print("Answer:", json_obj["answers"])
-            print("")
+                        print(f"Length {len(tokenized_prompt)}. Skipped.")
+                    continue
 
-        with open(out_path, "a", encoding="utf-8") as f:
-            json.dump(pred, f, ensure_ascii=False)
-            f.write('\n')
-        # import pdb;pdb.set_trace()
-    
-    throughput = total_token_count / total_run_time if total_run_time > 0 else 0
-    print(f"[Throughput] total_tokens={total_token_count}, total_time={total_run_time:.2f}s, throughput={throughput:.2f} tokens/s")
-    return preds
+            else:
+                if truncation == "suffix":
+                    length = len(tokenized_prompt)
+                    if length > max_length - max_gen:
+                        if verbose:
+                            print("over length")
+                        init_token_num = 128
+                        prompt = tokenizer.decode(tokenized_prompt[:init_token_num].tolist() + tokenized_prompt[- (max_length - max_gen - init_token_num):].tolist())
+                        tokenized_prompt = tokenizer(prompt, truncation=False, return_tensors="pt", add_special_tokens=add_special_tokens).input_ids[0]
+                else:
+                    raise NotImplementedError
+        
+            kwargs = {}
+            if model_type in ['qllm']:
+                kwargs["question_ids"] = extract_question_id(
+                    dataset, tokenizer, tokenized_prompt, json_obj)
+                
+            start_time = time.time()
+            if dataset == "samsum":
+                output = searcher.generate(
+                    input_ids = tokenized_prompt,
+                    max_length=max_gen,
+                    extra_end_token_ids=[
+                        tokenizer.encode("\n", add_special_tokens=False)[-1],
+                    ],
+                    chunk_size=gen_chunk_size,
+                    **kwargs,
+                )
+            else:
+                output = searcher.generate(
+                    input_ids = tokenized_prompt,
+                    max_length=max_gen,
+                    chunk_size=gen_chunk_size,
+                    **kwargs,
+                )
+            run_time = time.time() - start_time
+            total_run_time += run_time
+            total_token_count += len(tokenized_prompt) + len(output[0])
+            result = post_process(output[0], model_name)
+            pred = {
+                "pred": result, "answers": json_obj["answers"], "all_classes": json_obj["all_classes"], "length": json_obj["length"], "token_length": len(tokenized_prompt) + max_gen, 'time': run_time,
+            }
+            searcher.clear()
+            cur += 1
+            if verbose:
+                print(f"----------{cur}/{total}----------")
+                print("Question:", prompt[-100:])
+                print("Pred:", result)
+                print("Answer:", json_obj["answers"])
+                print("")
+
+            with open(out_path, "a", encoding="utf-8") as f:
+                json.dump(pred, f, ensure_ascii=False)
+                f.write('\n')
+            # import pdb;pdb.set_trace()
+            prof.step()
+        
+        throughput = total_token_count / total_run_time if total_run_time > 0 else 0
+        print(f"[Throughput] total_tokens={total_token_count}, total_time={total_run_time:.2f}s, throughput={throughput:.2f} tokens/s")
+        return preds
 
 
 if __name__ == '__main__':
@@ -359,87 +369,74 @@ if __name__ == '__main__':
     if multiprocessing:
         assert args.rank in list(range(args.world_size))
 
-    os.makedirs('./log/trace', exist_ok=True)
-    with torch.profiler.profile(
-        activities=[
-            torch.profiler.ProfilerActivity.CPU,
-            torch.profiler.ProfilerActivity.CUDA,
-        ],
-        schedule=torch.profiler.schedule(wait=1, warmup=1, active=5),
-        on_trace_ready=torch.profiler.tensorboard_trace_handler('./log/trace'),
-        record_shapes=True,
-        profile_memory=True,
-        with_stack=True,
-    ) as prof:
+    # predict on each dataset
+    for dataset in datasets:
+        dname = dataset
+        if dataset in set([
+            "kv_retrieval", "passkey", "number_string", "code_run", "code_debug", "longdialogue_qa_eng", "longbook_qa_eng", "longbook_sum_eng", "longbook_choice_eng", "longbook_qa_chn", "math_find", "math_calc"
+        ]):
+            path = "benchmark/data/infinite-bench"
+            data = load_infinite_bench(path, dname)
 
-        # predict on each dataset
-        for dataset in datasets:
-            dname = dataset
-            if dataset in set([
-                "kv_retrieval", "passkey", "number_string", "code_run", "code_debug", "longdialogue_qa_eng", "longbook_qa_eng", "longbook_sum_eng", "longbook_choice_eng", "longbook_qa_chn", "math_find", "math_calc"
-            ]):
-                path = "benchmark/data/infinite-bench"
-                data = load_infinite_bench(path, dname)
+        elif dataset in set([
+            "kv_retrieval_32k", "kv_retrieval_64k", "kv_retrieval_128k", "kv_retrieval_256k", "kv_retrieval_512k", "kv_retrieval_768k", "kv_retrieval_1024k", 
+        ]):
+            path = "benchmark/data/scale"
+            data = load_infinite_bench(path, dname)
 
-            elif dataset in set([
-                "kv_retrieval_32k", "kv_retrieval_64k", "kv_retrieval_128k", "kv_retrieval_256k", "kv_retrieval_512k", "kv_retrieval_768k", "kv_retrieval_1024k", 
-            ]):
-                path = "benchmark/data/scale"
-                data = load_infinite_bench(path, dname)
+        elif dataset.startswith('custom'):
+            data = load_infinite_bench("benchmark/data/custom/", dataset)
 
-            elif dataset.startswith('custom'):
-                data = load_infinite_bench("benchmark/data/custom/", dataset)
-
-            else:
-                data = load_from_disk(
-                    f"benchmark/data/longbench/{dataset}"
-                )
-            if args.num_samples is not None:
-                data = data.select(range(args.num_samples))
-
-
-            out_path = os.path.join(
-                output_dir_path,
-                f"{dname}.jsonl"
+        else:
+            data = load_from_disk(
+                f"benchmark/data/longbench/{dataset}"
             )
-            if os.path.exists(out_path):
-                with open(out_path) as f:
-                    complete_l = len(f.readlines())
-                if complete_l == len(data):
-                    print(f'{dname} completed')
-                    continue
-            
-            if multiprocessing:
-                out_path = out_path + f"_{args.rank}"
+        if args.num_samples is not None:
+            data = data.select(range(args.num_samples))
 
-            print(f"Pred {dname}")
-            if dataset in set([
-                "kv_retrieval_32k", "kv_retrieval_64k", "kv_retrieval_128k", "kv_retrieval_256k", "kv_retrieval_512k", "kv_retrieval_768k", "kv_retrieval_1024k", 
-            ]):
-                prompt_format = dataset2prompt['kv_retrieval']
-                max_gen = dataset2maxlen['kv_retrieval']
-            elif dataset.startswith('custom'):
-                if dataset.startswith('custom_book'):
-                    prompt_format = dataset2prompt['custom_book']
-                elif dataset.startswith('custom_paper'):
-                    prompt_format = dataset2prompt['custom_paper']
-                else:
-                    prompt_format = dataset2prompt[dataset]
-                max_gen = 2048
+
+        out_path = os.path.join(
+            output_dir_path,
+            f"{dname}.jsonl"
+        )
+        if os.path.exists(out_path):
+            with open(out_path) as f:
+                complete_l = len(f.readlines())
+            if complete_l == len(data):
+                print(f'{dname} completed')
+                continue
+        
+        if multiprocessing:
+            out_path = out_path + f"_{args.rank}"
+
+        print(f"Pred {dname}")
+        if dataset in set([
+            "kv_retrieval_32k", "kv_retrieval_64k", "kv_retrieval_128k", "kv_retrieval_256k", "kv_retrieval_512k", "kv_retrieval_768k", "kv_retrieval_1024k", 
+        ]):
+            prompt_format = dataset2prompt['kv_retrieval']
+            max_gen = dataset2maxlen['kv_retrieval']
+        elif dataset.startswith('custom'):
+            if dataset.startswith('custom_book'):
+                prompt_format = dataset2prompt['custom_book']
+            elif dataset.startswith('custom_paper'):
+                prompt_format = dataset2prompt['custom_paper']
             else:
                 prompt_format = dataset2prompt[dataset]
-                max_gen = dataset2maxlen[dataset]
-            
-            get_pred(
-                model, tokenizer, data, 
-                args.max_len, max_gen, 
-                prompt_format, dataset, 
-                args.conv_type, 
-                args.chunk_size, args.truncation,
-                args.rank, args.world_size,
-                args.verbose, out_path,
-                args.model.type,
-            )
-            peak_memory = torch.cuda.max_memory_allocated(device='cuda')
-            print(f"[Memory] Peak Memory Allocated: {peak_memory / 1024 / 1024:.2f} MB")
+            max_gen = 2048
+        else:
+            prompt_format = dataset2prompt[dataset]
+            max_gen = dataset2maxlen[dataset]
+        
+        get_pred(
+            model, tokenizer, data, 
+            args.max_len, max_gen, 
+            prompt_format, dataset, 
+            args.conv_type, 
+            args.chunk_size, args.truncation,
+            args.rank, args.world_size,
+            args.verbose, out_path,
+            args.model.type,
+        )
+        peak_memory = torch.cuda.max_memory_allocated(device='cuda')
+        print(f"[Memory] Peak Memory Allocated: {peak_memory / 1024 / 1024:.2f} MB")
 
