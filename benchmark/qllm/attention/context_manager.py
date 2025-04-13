@@ -524,17 +524,18 @@ class ContextManager:
 
 
         # calc local result first to overlap host-device communication
+        stream = torch.cuda.current_stream()
         start_event = torch.cuda.Event(enable_timing=True)
         end_event = torch.cuda.Event(enable_timing=True)
-        start_event.record()
+        start_event.record(stream)
         attn = self.Attn(local_h_q.shape, local_h_q.dtype, local_h_q.device)
         attn.append(
             local_h_q, local_h_k, local_h_v, 
             get_score=True, sliding_window=self.n_local
         )
         torch.cuda.synchronize()
-        end_event.record()  # 记录结束时间点
-        torch.cuda.synchronize()  # 确保执行完（可选）
+        end_event.record(stream)
+        stream.synchronize()
         elapsed_time_ms = start_event.elapsed_time(end_event)  # 单位 ms
         log(f"[local Compute] time={elapsed_time_ms/1000:.3f}s")
 
@@ -573,7 +574,6 @@ class ContextManager:
             torch.cuda.current_stream().wait_stream(GLOBAL_STREAM)
 
         # calc global result
-        start_event.record()
         attn.append(
             global_h_q, global_h_k, global_h_v, 
             end=True, get_score=self.calc_block_score, 
@@ -582,11 +582,6 @@ class ContextManager:
         )
 
         o, score_list = attn.get_result()
-        torch.cuda.synchronize()
-        end_event.record()  # 记录结束时间点
-
-        elapsed_time_ms = start_event.elapsed_time(end_event)  # 单位 ms
-        log(f"[global Compute] time={elapsed_time_ms/1000:.3f}s")
 
         loc_score = score_list[0]
         glb_score = score_list[1]
