@@ -13,6 +13,8 @@ from qllm.utils import patch_hf, GreedySearch, patch_model_center
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from qllm.utils.extract_question import extract_question_id
 import time 
+from qllm.utils.profiler import init_profiler
+init_profiler("./logs")
 
 def parse_args():
     parser = argparse.ArgumentParser()
