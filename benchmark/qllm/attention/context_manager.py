@@ -417,7 +417,7 @@ class ContextManager:
 
         return ret, score
 
-    '''
+    
     def get_global_hidden_and_mask(
         self, len_q, block_topk
     ):
@@ -483,70 +483,7 @@ class ContextManager:
 
         global_h_k = global_h_k[:, :, :ed, :]
         global_h_v = global_h_v[:, :, :ed, :]
-        return global_h_k, global_h_v, sliding_window, global_block_map, block_num'''
-
-    def get_global_hidden_and_mask(
-        self, len_q, block_topk
-    ):
-        assert len(block_topk) == self.num_units
-        global_block_map = [[] for _ in range(self.num_units)]
-        global_remainder_len = max(self._global_remainder_ed - self._global_remainder_st + len_q - self.n_local, 0)
-        init_len = self.init_k.size(-2)
-
-        global_h_k = self.global_buffer[0]
-        global_h_v = self.global_buffer[1]
-
-        block_num = len(block_topk[0])
-        for u in range(self.num_units):
-            assert len(block_topk[u]) == block_num
-
-            block_topk[u].sort()
-            global_block_map[u] = deepcopy(self.global_buffer_block_id_list[u])
-            for b_idx in block_topk[u]:
-                if b_idx in global_block_map[u]:
-                    continue
-
-                st = -1
-                ed = -1
-                for j in range(self.topk):
-                    if global_block_map[u][j] == -1 or global_block_map[u][j] not in block_topk[u]:
-                        st = j * self.block_size
-                        ed = st + self.block_size
-                        global_block_map[u][j] = b_idx
-                        break
-
-                assert b_idx in self.cached_blocks[u]
-                self.global_blocks[u][b_idx].load((global_h_k[u, :, st:ed, :], global_h_v[u, :, st:ed, :]))
-
-        init_st = block_num * self.block_size
-        init_ed = init_st + init_len
-        if self.global_buffer_init_st != init_st or self.global_buffer_init_ed != init_ed:
-            global_h_k[:, :, init_st: init_ed, :].copy_(self.init_k, non_blocking=True)
-            global_h_v[:, :, init_st: init_ed, :].copy_(self.init_v, non_blocking=True)
-
-        ed = init_ed
-
-        rmd_st = init_ed
-        rmd_ed = rmd_st + global_remainder_len
-        ed = rmd_ed
-        global_h_k[:, :, rmd_st: rmd_ed, :].copy_(self.global_remainder[0][:, :, self._global_remainder_st:self._global_remainder_st+global_remainder_len, :], non_blocking=True)
-        global_h_v[:, :, rmd_st: rmd_ed, :].copy_(self.global_remainder[1][:, :, self._global_remainder_st:self._global_remainder_st+global_remainder_len, :], non_blocking=True)
-
-        sliding_window = (self.global_remainder[0].size(-2) + rmd_st, self.n_local)
-
-        self.global_buffer_block_id_list = deepcopy(global_block_map)
-        self.global_buffer_init_st = init_st
-        self.global_buffer_init_ed = init_ed
-
-        for u in range(self.num_units):
-            assert max(global_block_map[u][block_num:] + [-1]) == -1
-            assert min(global_block_map[u][:block_num] + [0]) > -1
-            global_block_map[u] = list(global_block_map[u][:block_num])
-
-        global_h_k = global_h_k[:, :, :ed, :]
-        global_h_v = global_h_v[:, :, :ed, :]
         return global_h_k, global_h_v, sliding_window, global_block_map, block_num
-
 
     def update_block_score(
         self, global_score: torch.FloatTensor, global_block_map, global_block_num
@@ -702,7 +639,7 @@ class ContextManager:
          
         return ret
 
-    '''def append_global(
+    def append_global(
         self, exc_length, kv_length, local_score, global_q
     ):
 
@@ -781,85 +718,8 @@ class ContextManager:
             global_remainder_st += self.block_size
 
         self._global_remainder_ed = global_remainder_ed
-        self._global_remainder_st = global_remainder_st'''
-
-    def append_global(
-        self, exc_length, kv_length, local_score, global_q
-    ):
-        global_remainder_ed = self._global_remainder_ed + exc_length
-        global_remainder_st = self._global_remainder_st
-
-        global_remainder_len = global_remainder_ed - global_remainder_st
-
-        assert local_score.shape[:3] == (self.num_units, self.unit_size, kv_length)
-        local_score = local_score[:, :, -exc_length-self.n_local:]
-        self.global_remainder_local_score[:, :, global_remainder_ed-local_score.size(-1):global_remainder_ed].add_(local_score)
-
-        if not self.init_exc and global_remainder_len > self.n_local:
-            global_k = self.global_remainder[0]
-            global_v = self.global_remainder[1]
-
-            append_init_len = min(
-                self.n_init - self.init_k.size(-2),
-                global_remainder_len - self.n_local
-            )
-            self.init_k = torch.cat(
-                (self.init_k, global_k[:, :, global_remainder_st:global_remainder_st + append_init_len, :]), dim=-2
-            )
-            self.init_v = torch.cat(
-                (self.init_v, global_v[:, :, global_remainder_st:global_remainder_st + append_init_len, :]), dim=-2
-            )
-            global_remainder_st += append_init_len
-            global_remainder_len -= append_init_len
-
-            if self.init_k.size(-2) == self.n_init:
-                self.init_exc = True
-
-            if self.question is None and self.question_ids is not None and self.question_ids[1] - self.question_ids[0] > 0:
-                question = global_q[:, :, self.question_ids[0]:self.question_ids[1]]
-                if question.size(2) > 0:
-                    question_score = self.global_remainder_local_score[:, :, self.question_ids[0]:self.question_ids[1]]
-                    question_score_topk = question_score.topk(min(self.repr_topk, question_score.size(-1)), dim=-1).indices
-                    question = torch.gather(
-                        question, -2, question_score_topk[:, :, :, None].expand(self.num_units, self.unit_size, -1, self.dim_head)
-                    ).mean(dim=2, keepdim=False)
-                    assert question.shape == (self.num_units, self.unit_size, self.dim_head)
-
-                    self.question = question.reshape(self.num_units, self.dim_head * self.unit_size)
-                    for u in range(self.num_units):
-                        self.block_k[u].set_question(self.question[u])
-
-        while global_remainder_len - self.block_size >= self.n_local:
-            global_remainder_len -= self.block_size
-            for u in range(self.num_units):
-                self.global_blocks[u].append((
-                    MemoryUnit(
-                        (
-                            self.global_remainder[0][u, :, global_remainder_st:global_remainder_st + self.block_size, :],
-                            self.global_remainder[1][u, :, global_remainder_st:global_remainder_st + self.block_size, :]
-                        ),
-                        self.cuda_cache,
-                        False,
-                        self.pin_memory
-                    )
-                ))
-            global_block_k = self.get_block_k(
-                self.global_remainder[0][:, :, global_remainder_st:global_remainder_st + self.block_size, :],
-                self.global_remainder_local_score[:, :, global_remainder_st:global_remainder_st + self.block_size]
-            )
-            assert global_block_k.shape == (self.num_units, self.unit_size, self.repr_topk, self.dim_head)
-            global_block_k = global_block_k.mean(dim=-2, keepdim=False)
-            global_block_k = global_block_k.reshape(self.num_units, self.unit_size * self.dim_head)
-            global_block_k = global_block_k[:, None, :]
-
-            self.num_global_block += 1
-            for u in range(self.num_units):
-                self.block_k[u].append(global_block_k[u])
-            global_remainder_st += self.block_size
-
-        self._global_remainder_ed = global_remainder_ed
         self._global_remainder_st = global_remainder_st
-
+    
     def append(
         self,
         local_q, local_k, local_v,
