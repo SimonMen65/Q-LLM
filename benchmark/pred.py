@@ -426,3 +426,6 @@ if __name__ == '__main__':
             args.model.type,
         )
 
+        peak_memory = torch.cuda.max_memory_allocated(device='cuda')
+        print(f"[Memory] Peak Memory Allocated: {peak_memory / 1024 / 1024:.2f} MB")
+
