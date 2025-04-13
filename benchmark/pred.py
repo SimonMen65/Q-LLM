@@ -222,7 +222,7 @@ def get_pred(
     
     with torch.profiler.profile(
         activities=[torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA],
-        schedule=torch.profiler.schedule(wait=1, warmup=1, active=5),
+        schedule=torch.profiler.schedule(wait=0, warmup=0, active=1),
         on_trace_ready=torch.profiler.tensorboard_trace_handler('./log/trace'),
         record_shapes=True,
         profile_memory=True,
