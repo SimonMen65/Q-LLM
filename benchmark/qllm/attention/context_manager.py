@@ -1,5 +1,6 @@
 import torch
 from typing import Optional, Tuple
+import torch.nn.functional as F
 from copy import deepcopy
 from .dot_production_attention import get_multi_stage_dot_production_attention
 import json 
@@ -183,6 +184,19 @@ class VectorTensor:
 
     def __len__(self):
         return self.length
+    
+    def get_topk_cosine(self, tensor: torch.Tensor, topk):
+        assert tensor.dim() == 1 and tensor.size(0) == self.hidden_size
+        q = F.normalize(tensor, dim=0)
+        k = F.normalize(self.data[:self.length], dim=-1)
+        logits = torch.matmul(k, q)
+        return logits.topk(topk, dim=0).indices.cpu().tolist(), logits.cpu().tolist()
+
+    def get_topk_l2(self, tensor: torch.Tensor, topk):
+        assert tensor.dim() == 1 and tensor.size(0) == self.hidden_size
+        dists = torch.norm(self.data[:self.length] - tensor, dim=1)
+        scores = -dists  # lower distance => higher score
+        return scores.topk(topk, dim=0).indices.cpu().tolist(), scores.cpu().tolist()
 
 
 # class Faiss:
