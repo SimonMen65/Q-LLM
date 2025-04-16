@@ -422,7 +422,7 @@ class ContextManager:
             global_h_q = global_h_q.reshape(self.num_units, self.dim_head * self.unit_size)
             ret = []
             for u in range(self.num_units):
-                topk, score = self.block_k[u].get_topk_cosine(
+                topk, score = self.block_k[u].get_topk_l2(
                     global_h_q[u], self.topk if self.topk < self.num_global_block else self.num_global_block)
                 ret.append(topk)
         
