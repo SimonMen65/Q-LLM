@@ -177,20 +177,20 @@ class VectorTensor:
             data = self.get_data().unsqueeze(0)  # [1, num_data, hidden_size]
             query_c = tensor.unsqueeze(0)        # [1, hidden_size]
             
-            if self.question is not None:
-                query_q = self.question.unsqueeze(0)  # [1, hidden_size]
-            else:
-                query_q = None
+            # if self.question is not None:
+            #     query_q = self.question.unsqueeze(0)  # [1, hidden_size]
+            # else:
+            #     query_q = None
                 
-            indices, scores = self.cuda_topk(
-                data,
-                query_c,
-                query_q,
-                self.question_weight,
-                topk
-            )
+            # indices, scores = self.cuda_topk(
+            #     data,
+            #     query_c,
+            #     query_q,
+            #     self.question_weight,
+            #     topk
+            # )
             
-            return indices.squeeze(0).tolist(), scores.squeeze(0).tolist()  # 返回单unit的列表
+            # return indices.squeeze(0).tolist(), scores.squeeze(0).tolist()  # 返回单unit的列表
 
         elif method == 'cosine':
             logits = F.cosine_similarity(X, tensor.unsqueeze(0), dim=1)
