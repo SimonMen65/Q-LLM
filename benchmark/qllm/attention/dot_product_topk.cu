@@ -120,7 +120,7 @@ std::pair<torch::Tensor, torch::Tensor> dot_product_topk_cuda(
     auto options = torch::TensorOptions()
         .dtype(torch::kInt64)
         .device(data.device());
-    auto topk_indices = torch::full({num_units, num_heads, topk}, -1, options);
+    auto topk_indices = torch::full({num_units, topk}, -1, options);
     
     options = options.dtype(data.dtype());
     auto topk_values = torch::full({num_units, num_heads, topk}, 

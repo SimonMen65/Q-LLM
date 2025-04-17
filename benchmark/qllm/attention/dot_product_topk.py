@@ -11,6 +11,9 @@ dot_product_topk_module = load(
 class DotProductTopKFunction(torch.autograd.Function):
     @staticmethod
     def forward(ctx, data, query_c, query_q, question_weight, topk):
+        assert data.dim() == 3, f"Data must be 3D [batch, seq, hidden], got {data.shape}"
+        assert query_c.dim() == 2, f"Query must be 2D [batch, hidden], got {query_c.shape}"
+        
         # 保存原始类型
         orig_dtype = data.dtype
         
