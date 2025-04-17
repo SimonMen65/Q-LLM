@@ -77,9 +77,9 @@ def dot_topk_cuda(x: torch.Tensor, y: torch.Tensor, topk: int):
     topk_scores = torch.empty((topk,), dtype=torch.float32, device="cuda")
     topk_indices = torch.empty((topk,), dtype=torch.int32, device="cuda")
 
-    threads = 1024
-    blocks = 1
-    shared_mem_size = N * (4 + 4)  # float32 + int32
+    threads = 256
+    blocks = (N + threads - 1) // threads
+    shared_mem_size = threads * (4 + 4)  # 每个线程一份 float + int
 
     cuda_module.dot_topk_launcher(
         x.contiguous(), y.contiguous(), topk_scores, topk_indices, topk
