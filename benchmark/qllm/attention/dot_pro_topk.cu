@@ -9,6 +9,7 @@ extern "C" __global__ void dot_topk_kernel(
     int D,
     int K
 ) {
+    
     extern __shared__ float shared_data[];
     float* scores = shared_data;
     int* indices = (int*)&scores[N];

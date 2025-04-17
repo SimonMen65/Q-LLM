@@ -33,3 +33,5 @@ void dot_topk_launcher(
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("dot_topk_launcher", &dot_topk_launcher, "Dot + TopK Kernel");
 }
+
+
