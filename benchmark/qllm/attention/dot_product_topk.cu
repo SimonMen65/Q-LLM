@@ -127,9 +127,12 @@ std::pair<torch::Tensor, torch::Tensor> dot_product_topk_cuda(
                                  -std::numeric_limits<float>::infinity(), options);
     
     const dim3 blocks(num_units, num_heads);
-    const int smem_size = 2 * hidden_size * sizeof(scalar_t); // 直接使用scalar_t类型
-    
+
+    // 关键修改：将共享内存计算移入类型分派宏内部
     AT_DISPATCH_FLOATING_TYPES(data.scalar_type(), "dot_product_topk", ([&] {
+        // 现在scalar_t在此作用域内有效
+        const int smem_size = 2 * hidden_size * sizeof(scalar_t);
+        
         auto data_ptr = data.data_ptr<scalar_t>();
         auto query_c_ptr = query_c.data_ptr<scalar_t>();
         auto query_q_ptr = query_q.has_value() ? query_q->data_ptr<scalar_t>() : nullptr;
@@ -140,7 +143,7 @@ std::pair<torch::Tensor, torch::Tensor> dot_product_topk_cuda(
             query_q_ptr,
             question_weight,
             topk_indices.data_ptr<int64_t>(),
-            topk_values.data_ptr<scalar_t>(), // 确保类型一致
+            topk_values.data_ptr<scalar_t>(),
             num_units,
             hidden_size,
             data_length,
@@ -149,4 +152,4 @@ std::pair<torch::Tensor, torch::Tensor> dot_product_topk_cuda(
     }));
     
     return {topk_indices, topk_values};
-} 
+}
