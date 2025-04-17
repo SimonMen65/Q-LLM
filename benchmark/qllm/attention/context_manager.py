@@ -169,8 +169,9 @@ class VectorTensor:
 
     def get_topk(self, tensor: torch.Tensor, topk, method='dot'):
         assert tensor.dim() == 1 and tensor.size(0) == self.hidden_size
-        print(self.data.dim())
+        print("self.data shape:", self.data.shape)  # 应该是 [num_data, hidden_size]
         X = self.data[:self.length]
+        print("X shape:", X.shape)  # 应该是 [self.length, hidden_size]
 
         if method == 'dot':
             data = self.get_data().unsqueeze(0)  # [1, num_data, hidden_size]
