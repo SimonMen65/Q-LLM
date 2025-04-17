@@ -172,15 +172,14 @@ class VectorTensor:
         X = self.data[:self.length]
 
         if method == 'dot':
-            # 调整为2D张量 [num_units=1, hidden_size]
-            data = self.get_data().view(-1, self.hidden_size)
-            query_c = tensor.view(1, -1)  # 修改为2D
+            data = self.get_data().unsqueeze(0)  # [1, num_data, hidden_size]
+            query_c = tensor.unsqueeze(0)        # [1, hidden_size]
             
             if self.question is not None:
-                query_q = self.question.view(1, -1)  # 同样调整为2D
+                query_q = self.question.unsqueeze(0)  # [1, hidden_size]
             else:
                 query_q = None
-            
+                
             indices, scores = self.cuda_topk(
                 data,
                 query_c,
@@ -189,7 +188,7 @@ class VectorTensor:
                 topk
             )
             
-            return indices[0].cpu().tolist(), scores[0].cpu().tolist()
+            return indices.squeeze(0).tolist(), scores.squeeze(0).tolist()  # 返回单unit的列表
 
         elif method == 'cosine':
             logits = F.cosine_similarity(X, tensor.unsqueeze(0), dim=1)
