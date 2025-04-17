@@ -1,5 +1,3 @@
-# 新增文件 cuda/dot_product_topk.cu
-
 #include <torch/extension.h>
 #include <cuda.h>
 #include <cuda_runtime.h>
@@ -34,7 +32,6 @@ __global__ void batched_dot_product_topk_kernel(
     scalar_t* s_query_c = reinterpret_cast<scalar_t*>(shared_mem);
     scalar_t* s_query_q = s_query_c + hidden_size;
     
-    // 加载查询到共享内存
     for (int i = threadIdx.x; i < hidden_size; i += blockDim.x) {
         s_query_c[i] = query_c[unit_id * total_heads * hidden_size + head_id * hidden_size + i];
         if (query_q != nullptr) {
@@ -43,7 +40,7 @@ __global__ void batched_dot_product_topk_kernel(
     }
     __syncthreads();
     
-    // 每个线程处理多个数据点
+
     scalar_t local_scores[ITEMS_PER_THREAD];
     int local_indices[ITEMS_PER_THREAD];
     
@@ -69,7 +66,7 @@ __global__ void batched_dot_product_topk_kernel(
         local_indices[item] = data_idx;
     }
     
-    // 使用CUB库进行块内TopK归约
+
     typedef cub::BlockReduce<cub::KeyValuePair<int, scalar_t>, THREADS_PER_BLOCK> BlockReduce;
     __shared__ typename BlockReduce::TempStorage temp_storage;
     
@@ -90,7 +87,6 @@ __global__ void batched_dot_product_topk_kernel(
             const int output_idx = unit_id * topk + head_id * topk * num_units;
             for (int k = 0; k < topk; ++k) {
                 if (block_max.value > topk_values[output_idx + k]) {
-                    // 插入排序方式更新TopK
                     for (int m = topk-1; m > k; --m) {
                         topk_values[output_idx + m] = topk_values[output_idx + m-1];
                         topk_indices[output_idx + m] = topk_indices[output_idx + m-1];

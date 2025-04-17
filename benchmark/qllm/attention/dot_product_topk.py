@@ -1,5 +1,3 @@
-# 新增文件 cuda/dot_product_topk.py
-
 import torch
 from torch.utils.cpp_extension import load
 
