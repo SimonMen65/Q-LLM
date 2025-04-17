@@ -172,12 +172,12 @@ class VectorTensor:
         X = self.data[:self.length]
 
         if method == 'dot':
-            # logits = torch.matmul(X, tensor)
+            # 调整为2D张量 [num_units=1, hidden_size]
             data = self.get_data().view(-1, self.hidden_size)
-            query_c = tensor.view(1, 1, -1).expand(1, 1, -1)  # 假设num_units=1
+            query_c = tensor.view(1, -1)  # 修改为2D
             
             if self.question is not None:
-                query_q = self.question.view(1, 1, -1).expand(1, 1, -1)
+                query_q = self.question.view(1, -1)  # 同样调整为2D
             else:
                 query_q = None
             
