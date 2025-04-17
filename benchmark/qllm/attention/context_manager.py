@@ -7,6 +7,40 @@ import json
 
 attention_num = 0
 
+cuda_path = "./dot_pro_topk.cu"
+with open(cuda_path, "w") as f:
+    f.write(cuda_code)
+
+# Load and compile kernel
+cuda_module = load(
+    name="dot_topk_kernel",
+    sources=[cuda_path],
+    extra_cuda_cflags=["-O3"],
+    verbose=True
+)
+
+def dot_topk_cuda(x: torch.Tensor, y: torch.Tensor, topk: int):
+    assert x.is_cuda and y.is_cuda
+    assert x.dtype == torch.float32 and y.dtype == torch.float32
+    N, D = x.shape
+    assert y.shape[0] == D
+    assert topk <= N
+
+    topk_scores = torch.empty((topk,), dtype=torch.float32, device="cuda")
+    topk_indices = torch.empty((topk,), dtype=torch.int32, device="cuda")
+
+    threads = 1024
+    blocks = 1
+    shared_mem_size = N * (4 + 4)  # float32 + int32
+
+    cuda_module.dot_topk_kernel(
+        x.contiguous(), y.contiguous(), topk_scores, topk_indices,
+        N, D, topk,
+        grid=(blocks,), block=(threads,), shared_mem=shared_mem_size
+    )
+
+    return topk_indices, topk_scores
+
 class CudaCache:
     def __init__(self, num_units, unit_size, dtype):
         self.num_units = num_units
@@ -168,7 +202,8 @@ class VectorTensor:
         X = self.data[:self.length]
 
         if method == 'dot':
-            logits = torch.matmul(X, tensor)
+            # logits = torch.matmul(X, tensor)
+            return dot_topk_cuda(self.get_data(), tensor, topk)
 
         elif method == 'cosine':
             logits = F.cosine_similarity(X, tensor.unsqueeze(0), dim=1)
