@@ -8,8 +8,6 @@ import json
 attention_num = 0
 
 cuda_path = "./dot_pro_topk.cu"
-with open(cuda_path, "w") as f:
-    f.write(cuda_code)
 
 # Load and compile kernel
 cuda_module = load(
