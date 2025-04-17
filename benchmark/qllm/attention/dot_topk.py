@@ -54,15 +54,11 @@ extern "C" __global__ void dot_topk_kernel(
 }
 """
 
-# Write CUDA code to file
-cuda_filename = os.path.join(os.path.dirname(__file__), "dot_topk_kernel.cu")
-with open(cuda_filename, "w") as f:
-    f.write(cuda_code)
 
 # Load CUDA kernel module
 cuda_module = load(
     name="dot_topk_kernel",
-    sources=[cuda_filename],
+    sources=["dot_pro_topk.cu", "binding.cpp"],  # 注意两个文件都要
     extra_cuda_cflags=["-O3"],
     verbose=True
 )
@@ -81,10 +77,8 @@ def dot_topk_cuda(x: torch.Tensor, y: torch.Tensor, topk: int):
     blocks = 1
     shared_mem_size = N * (4 + 4)  # float32 + int32
 
-    cuda_module.dot_topk_kernel(
-        x.contiguous(), y.contiguous(), topk_scores, topk_indices,
-        N, D, topk,
-        grid=(blocks,), block=(threads,), shared_mem=shared_mem_size
+    cuda_module.dot_topk_launcher(
+        x.contiguous(), y.contiguous(), topk_scores, topk_indices, topk
     )
 
     return topk_indices, topk_scores

@@ -89,11 +89,15 @@ def dot_topk_cuda(x: torch.Tensor, y: torch.Tensor, topk: int):
 
     return topk_indices, topk_scores
 
-# Optional local test
-if __name__ == "__main__":
-    N, D, K = 1024, 128, 8
-    x = torch.randn(N, D, device="cuda", dtype=torch.float32)
-    y = torch.randn(D, device="cuda", dtype=torch.float32)
-    indices, scores = dot_topk_cuda(x, y, K)
-    print("TopK indices:", indices)
-    print("TopK scores:", scores)
+// 封装 kernel 调用
+void dot_topk_kernel_launcher(const at::Tensor& x, const at::Tensor& y,
+                              at::Tensor& topk_scores, at::Tensor& topk_indices,
+                              int N, int D, int K) {
+    int threads = 1024;
+    int blocks = 1;
+    size_t shared_mem_size = N * (sizeof(float) + sizeof(int));
+    dot_topk_kernel<<<blocks, threads, shared_mem_size>>>(
+        x.data_ptr<float>(), y.data_ptr<float>(),
+        topk_scores.data_ptr<float>(), topk_indices.data_ptr<int>(),
+        N, D, K);
+}
