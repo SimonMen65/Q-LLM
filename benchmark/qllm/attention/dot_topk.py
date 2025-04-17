@@ -58,7 +58,7 @@ extern "C" __global__ void dot_topk_kernel(
 # Load CUDA kernel module
 cuda_module = load(
     name="dot_topk_kernel",
-    sources=["dot_pro_topk.cu", "binding.cpp"],  # 注意两个文件都要
+    sources=["/home/smen/Q-LLM/benchmark/qllm/attention/dot_pro_topk.cu", "/home/smen/Q-LLM/benchmark/qllm/attention/binding.cpp"],  # 注意两个文件都要
     extra_cuda_cflags=["-O3"],
     verbose=True
 )
