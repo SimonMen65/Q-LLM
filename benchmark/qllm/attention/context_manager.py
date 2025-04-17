@@ -163,18 +163,44 @@ class VectorTensor:
         return self.data[:self.length, ...]
 
 
-    def get_topk(self, tensor: torch.Tensor, topk): # inner product
+    def get_topk(self, tensor: torch.Tensor, topk, method='dot'):
         assert tensor.dim() == 1 and tensor.size(0) == self.hidden_size
-        # assert self.question is not None
-        logits_c = torch.matmul(self.data[:self.length], tensor[:, None]).squeeze(dim=-1)
-        ##################################################################
-        # change here
-        if self.question is not None:
-            logits_q = torch.matmul(self.data[:self.length], self.question[:, None]).squeeze(dim=-1)
-            logits =  logits_c + self.question_weight * logits_q
+        X = self.data[:self.length]
+
+        if method == 'dot':
+            logits = torch.matmul(X, tensor)
+
+        elif method == 'cosine':
+            logits = F.cosine_similarity(X, tensor.unsqueeze(0), dim=1)
+
+        elif method == 'l2':
+            logits = -torch.norm(X - tensor.unsqueeze(0), dim=1)
+
+        elif method == 'normalized_l2':
+            norm_sum = X.norm(dim=1) + tensor.norm()
+            logits = -torch.norm(X - tensor.unsqueeze(0), dim=1) / (norm_sum + 1e-6)
+
+        elif method == 'dot_minus_l2':
+            logits = torch.matmul(X, tensor) - torch.norm(X - tensor.unsqueeze(0), dim=1)
+
+        elif method == 'angular':
+            cos = F.cosine_similarity(X, tensor.unsqueeze(0), dim=1).clamp(-1 + 1e-6, 1 - 1e-6)
+            logits = -torch.acos(cos)
+
+        elif method == 'pearson':
+            x_mean = X.mean(dim=1, keepdim=True)
+            y_mean = tensor.mean()
+            x_std = X.std(dim=1, unbiased=False)
+            y_std = tensor.std(unbiased=False)
+            logits = ((X - x_mean) @ (tensor - y_mean)) / (x_std * y_std * X.shape[1] + 1e-6)
+
         else:
-            logits = logits_c
-        assert logits.dim() == 1 and logits.size(0) == self.length
+            raise ValueError(f"Unknown method: {method}")
+
+        if self.question is not None:
+            logits_q = torch.matmul(X, self.question[:, None]).squeeze(dim=-1)
+            logits += self.question_weight * logits_q
+
         return logits.topk(topk, dim=0).indices.cpu().tolist(), logits.cpu().tolist()
 
     def set_question(self, question):
@@ -184,19 +210,6 @@ class VectorTensor:
 
     def __len__(self):
         return self.length
-    
-    def get_topk_cosine(self, tensor: torch.Tensor, topk):
-        assert tensor.dim() == 1 and tensor.size(0) == self.hidden_size
-        q = F.normalize(tensor, dim=0)
-        k = F.normalize(self.data[:self.length], dim=-1)
-        logits = torch.matmul(k, q)
-        return logits.topk(topk, dim=0).indices.cpu().tolist(), logits.cpu().tolist()
-
-    def get_topk_l2(self, tensor: torch.Tensor, topk):
-        assert tensor.dim() == 1 and tensor.size(0) == self.hidden_size
-        dists = torch.norm(self.data[:self.length] - tensor, dim=1)
-        scores = -dists  # lower distance => higher score
-        return scores.topk(topk, dim=0).indices.cpu().tolist(), scores.cpu().tolist()
 
 
 # class Faiss:
@@ -423,7 +436,7 @@ class ContextManager:
             ret = []
             for u in range(self.num_units):
                 topk, score = self.block_k[u].get_topk_cosine(
-                    global_h_q[u], self.topk if self.topk < self.num_global_block else self.num_global_block)
+                    global_h_q[u], self.topk if self.topk < self.num_global_block else self.num_global_block, method='normalized_l2')
                 ret.append(topk)
         
         else:
