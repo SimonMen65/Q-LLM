@@ -15,7 +15,7 @@ __global__ void batched_dot_product_topk_kernel(
     const scalar_t* __restrict__ query_q,
     float question_weight,
     int64_t* __restrict__ topk_indices,
-    float* __restrict__ topk_values,
+    scalar_t* __restrict__ topk_values,
     int num_units,
     int hidden_size,
     int data_length,
@@ -127,7 +127,7 @@ std::pair<torch::Tensor, torch::Tensor> dot_product_topk_cuda(
                                  -std::numeric_limits<float>::infinity(), options);
     
     const dim3 blocks(num_units, num_heads);
-    const int smem_size = 2 * hidden_size * sizeof(typename torch::ScalarTypeToCPPType<scalar_t>::type);
+    const int smem_size = 2 * hidden_size * sizeof(scalar_t); // 直接使用scalar_t类型
     
     AT_DISPATCH_FLOATING_TYPES(data.scalar_type(), "dot_product_topk", ([&] {
         auto data_ptr = data.data_ptr<scalar_t>();
@@ -140,7 +140,7 @@ std::pair<torch::Tensor, torch::Tensor> dot_product_topk_cuda(
             query_q_ptr,
             question_weight,
             topk_indices.data_ptr<int64_t>(),
-            topk_values.data_ptr<scalar_t>(),
+            topk_values.data_ptr<scalar_t>(), // 确保类型一致
             num_units,
             hidden_size,
             data_length,
