@@ -109,8 +109,11 @@ std::pair<torch::Tensor, torch::Tensor> dot_product_topk_cuda(
     float question_weight,
     int topk
 ) {
-    TORCH_CHECK(data.dim() == 2, "Data must be 2D tensor");
-    TORCH_CHECK(query_c.dim() == 2, "Query must be 2D tensor");
+
+    TORCH_CHECK(data.dim() == 2, 
+        "Data must be 2D tensor, but got ", data.dim(), "D tensor instead");
+    TORCH_CHECK(query_c.dim() == 2, 
+        "Query must be 2D tensor, but got ", query_c.dim(), "D tensor instead");
     
     const int num_units = query_c.size(0);
     const int num_heads = query_c.size(1);
