@@ -5,7 +5,7 @@ from torch.utils.cpp_extension import load
 from copy import deepcopy
 from .dot_production_attention import get_multi_stage_dot_production_attention
 import json 
-from .dat_product_topk import dot_product_topk_wrapper
+from .dot_product_topk import dot_product_topk_wrapper
 
 attention_num = 0
 
