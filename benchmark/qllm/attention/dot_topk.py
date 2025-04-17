@@ -64,6 +64,10 @@ cuda_module = load(
 )
 
 def dot_topk_cuda(x: torch.Tensor, y: torch.Tensor, topk: int):
+    if x.dtype != torch.float32:
+        x = x.float()
+    if y.dtype != torch.float32:
+        y = y.float()
     assert x.is_cuda and y.is_cuda
     assert x.dtype == torch.float32 and y.dtype == torch.float32
     N, D = x.shape
