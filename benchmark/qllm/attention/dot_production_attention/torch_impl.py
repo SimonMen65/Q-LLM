@@ -67,11 +67,6 @@ class TorchMultiStageDotProductionAttention(MultiStageDotProductionAttention):
             if isinstance(sliding_window, int):
                 sliding_window = (len_k - len_q, sliding_window)
 
-            if len_q <= 0 or len_k <= 0:
-                print(f"[Error] invalid len_q={len_q}, len_k={len_k}")
-                print(f"Shapes: q={q.shape}, k={k.shape}")
-                raise ValueError("Cannot create mask: len_q or len_k <= 0")
-
             dist = torch.arange(
                 len_q, dtype=torch.int64, device=q.device
             )[:, None] - torch.arange(
