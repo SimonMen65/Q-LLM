@@ -153,3 +153,7 @@ std::pair<torch::Tensor, torch::Tensor> dot_product_topk_cuda(
     
     return {topk_indices, topk_values};
 }
+
+PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+    m.def("dot_product_topk", &dot_product_topk_cuda, "Batched dot product topk");
+}
