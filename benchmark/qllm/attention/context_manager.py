@@ -9,11 +9,11 @@ import json
 attention_num = 0
 
 cuda_path = "./dot_pro_topk.cu"
-
+cpp_path = "./binding.cpp"
 # Load and compile kernel
 cuda_module = load(
     name="dot_topk_kernel",
-    sources=[cuda_path],
+    sources=[cuda_path,cpp_path],
     extra_cuda_cflags=["-O3"],
     verbose=True
 )
