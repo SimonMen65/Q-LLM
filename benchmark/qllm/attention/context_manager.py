@@ -5,7 +5,7 @@ from torch.utils.cpp_extension import load
 from copy import deepcopy
 from .dot_production_attention import get_multi_stage_dot_production_attention
 import json 
-from .dot_topk import dot_topk_cuda
+from .dat_product_topk import dot_product_topk_wrapper
 
 attention_num = 0
 
@@ -134,6 +134,7 @@ class VectorTensor:
         self.hidden_size = hidden_size
         self.question = None
         self.question_weight = question_weight
+        self.cuda_topk = dot_product_topk_wrapper
 
     def append_cache(self):
         new_cache_size = self.cache_size * 2
@@ -172,7 +173,23 @@ class VectorTensor:
 
         if method == 'dot':
             # logits = torch.matmul(X, tensor)
-            return dot_topk_cuda(self.get_data(), tensor, topk)
+            data = self.get_data().view(-1, self.hidden_size)
+            query_c = tensor.view(1, 1, -1).expand(1, 1, -1)  # 假设num_units=1
+            
+            if self.question is not None:
+                query_q = self.question.view(1, 1, -1).expand(1, 1, -1)
+            else:
+                query_q = None
+            
+            indices, scores = self.cuda_topk(
+                data,
+                query_c,
+                query_q,
+                self.question_weight,
+                topk
+            )
+            
+            return indices[0].cpu().tolist(), scores[0].cpu().tolist()
 
         elif method == 'cosine':
             logits = F.cosine_similarity(X, tensor.unsqueeze(0), dim=1)
