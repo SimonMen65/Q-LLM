@@ -5,7 +5,7 @@ from torch.utils.cpp_extension import load
 
 dot_product_topk = load(
     name="dot_product_topk",
-    sources=["cuda/dot_product_topk.cu"],
+    sources=["dot_product_topk.cu"],
     extra_cflags=["-O3"],
     verbose=True
 )
