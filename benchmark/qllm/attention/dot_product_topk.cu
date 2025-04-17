@@ -8,20 +8,20 @@ namespace {
 constexpr int THREADS_PER_BLOCK = 256;
 constexpr int ITEMS_PER_THREAD = 4;
 
-template<typename scalar_t>
-__global__ void batched_dot_product_topk_kernel(
-    const scalar_t* __restrict__ data,
-    const scalar_t* __restrict__ query_c,
-    const scalar_t* __restrict__ query_q,
+template<>
+__global__ void batched_dot_product_topk_kernel<at::BFloat16>(
+    const at::BFloat16* __restrict__ data,
+    const at::BFloat16* __restrict__ query_c,
+    const at::BFloat16* __restrict__ query_q,
     float question_weight,
     int64_t* __restrict__ topk_indices,
-    scalar_t* __restrict__ topk_values,
+    at::BFloat16* __restrict__ topk_values,
     int num_units,
     int hidden_size,
     int data_length,
     int topk
 ) {
-    extern __shared__ char shared_mem[];
+    extern __shared__ float shared_mem[];
     
     const int unit_id = blockIdx.x;
     const int head_id = blockIdx.y;
@@ -29,19 +29,23 @@ __global__ void batched_dot_product_topk_kernel(
     
     if (unit_id >= num_units) return;
     
-    scalar_t* s_query_c = reinterpret_cast<scalar_t*>(shared_mem);
-    scalar_t* s_query_q = s_query_c + hidden_size;
-    
+    float* s_query_c = shared_mem;
+    float* s_query_q = s_query_c + hidden_size;
+
+    // 加载查询到共享内存（转换为float）
     for (int i = threadIdx.x; i < hidden_size; i += blockDim.x) {
-        s_query_c[i] = query_c[unit_id * total_heads * hidden_size + head_id * hidden_size + i];
+        s_query_c[i] = static_cast<float>(
+            query_c[unit_id * total_heads * hidden_size + head_id * hidden_size + i]
+        );
         if (query_q != nullptr) {
-            s_query_q[i] = query_q[unit_id * total_heads * hidden_size + head_id * hidden_size + i];
+            s_query_q[i] = static_cast<float>(
+                query_q[unit_id * total_heads * hidden_size + head_id * hidden_size + i]
+            );
         }
     }
     __syncthreads();
-    
 
-    scalar_t local_scores[ITEMS_PER_THREAD];
+    float local_scores[ITEMS_PER_THREAD];
     int local_indices[ITEMS_PER_THREAD];
     
     for (int item = 0; item < ITEMS_PER_THREAD; ++item) {
@@ -51,34 +55,34 @@ __global__ void batched_dot_product_topk_kernel(
             continue;
         }
         
-        scalar_t sum_c = 0, sum_q = 0;
-        const scalar_t* data_ptr = data + (unit_id * data_length + data_idx) * hidden_size;
+        float sum_c = 0, sum_q = 0;
+        const at::BFloat16* data_ptr = data + (unit_id * data_length + data_idx) * hidden_size;
         
         #pragma unroll
         for (int i = 0; i < hidden_size; ++i) {
-            sum_c += data_ptr[i] * s_query_c[i];
+            const float data_val = static_cast<float>(data_ptr[i]);
+            sum_c += data_val * s_query_c[i];
             if (query_q != nullptr) {
-                sum_q += data_ptr[i] * s_query_q[i];
+                sum_q += data_val * s_query_q[i];
             }
         }
         
         local_scores[item] = sum_c + (query_q ? question_weight * sum_q : 0);
         local_indices[item] = data_idx;
     }
-    
 
-    typedef cub::BlockReduce<cub::KeyValuePair<int, scalar_t>, THREADS_PER_BLOCK> BlockReduce;
+    typedef cub::BlockReduce<cub::KeyValuePair<int, float>, THREADS_PER_BLOCK> BlockReduce;
     __shared__ typename BlockReduce::TempStorage temp_storage;
     
     for (int item = 0; item < ITEMS_PER_THREAD; ++item) {
-        cub::KeyValuePair<int, scalar_t> thread_data(
+        cub::KeyValuePair<int, float> thread_data(
             local_indices[item], local_scores[item]
         );
         
-        cub::KeyValuePair<int, scalar_t> block_max = BlockReduce(temp_storage).Reduce(
+        cub::KeyValuePair<int, float> block_max = BlockReduce(temp_storage).Reduce(
             thread_data,
-            [](const cub::KeyValuePair<int, scalar_t>& a, 
-               const cub::KeyValuePair<int, scalar_t>& b) {
+            [](const cub::KeyValuePair<int, float>& a, 
+               const cub::KeyValuePair<int, float>& b) {
                 return (a.value > b.value) ? a : b;
             }
         );
@@ -86,12 +90,12 @@ __global__ void batched_dot_product_topk_kernel(
         if (threadIdx.x == 0) {
             const int output_idx = unit_id * topk + head_id * topk * num_units;
             for (int k = 0; k < topk; ++k) {
-                if (block_max.value > topk_values[output_idx + k]) {
+                if (block_max.value > static_cast<float>(topk_values[output_idx + k])) {
                     for (int m = topk-1; m > k; --m) {
                         topk_values[output_idx + m] = topk_values[output_idx + m-1];
                         topk_indices[output_idx + m] = topk_indices[output_idx + m-1];
                     }
-                    topk_values[output_idx + k] = block_max.value;
+                    topk_values[output_idx + k] = static_cast<at::BFloat16>(block_max.value);
                     topk_indices[output_idx + k] = block_max.key;
                     break;
                 }
@@ -99,8 +103,6 @@ __global__ void batched_dot_product_topk_kernel(
         }
     }
 }
-
-} // namespace
 
 std::pair<torch::Tensor, torch::Tensor> dot_product_topk_cuda(
     torch::Tensor data,
@@ -129,7 +131,10 @@ std::pair<torch::Tensor, torch::Tensor> dot_product_topk_cuda(
     const dim3 blocks(num_units, num_heads);
 
     // 关键修改：将共享内存计算移入类型分派宏内部
-    AT_DISPATCH_FLOATING_TYPES(data.scalar_type(), "dot_product_topk", ([&] {
+    AT_DISPATCH_FLOATING_TYPES_AND2(
+    at::ScalarType::Half, 
+    at::ScalarType::BFloat16,
+    data.scalar_type(), "dot_product_topk", ([&] {
         // 现在scalar_t在此作用域内有效
         const int smem_size = 2 * hidden_size * sizeof(scalar_t);
         

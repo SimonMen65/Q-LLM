@@ -11,15 +11,24 @@ dot_product_topk = load(
 
 class DotProductTopKFunction(torch.autograd.Function):
     @staticmethod
+    @staticmethod
     def forward(ctx, data, query_c, query_q, question_weight, topk):
-        # 通过模块调用C++函数
-        return dot_product_topk.dot_product_topk(  # 注意这里改为通过模块调用
-            data, 
-            query_c,
-            query_q,
-            question_weight,
-            topk
+        orig_dtype = data.dtype
+        
+        # 自动转换BFloat16到Float32进行计算
+        if orig_dtype == torch.bfloat16:
+            data = data.float()
+            query_c = query_c.float()
+            query_q = query_q.float() if query_q is not None else None
+        
+        indices, values = dot_product_topk.dot_product_topk(
+            data, query_c, query_q, question_weight, topk
         )
+        
+        # 转换回原始类型
+        if orig_dtype == torch.bfloat16:
+            return indices, values.bfloat16()
+        return indices, values
     
     @staticmethod
     def backward(ctx, grad_indices, grad_values):
