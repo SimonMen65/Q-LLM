@@ -1,7 +1,7 @@
 import torch
 from torch.utils.cpp_extension import load
 
-dot_product_topk = load(
+dot_product_topk_module = load(
     name="dot_product_topk",
     sources=["/home/smen/Q-LLM/benchmark/qllm/attention/dot_product_topk.cu"],
     extra_cflags=["-O3"],
