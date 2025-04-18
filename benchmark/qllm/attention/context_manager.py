@@ -558,6 +558,11 @@ class ContextManager:
         self,
         local_q, local_k, local_v, global_q
     ):
+        print("[Debug] Entering _append()")
+        print(f"local_q shape: {local_q.shape}")
+        print(f"local_k shape: {local_k.shape}")
+        print(f"local_v shape: {local_v.shape}")
+        print(f"global_q shape: {global_q.shape}")
 
         # get local_h_q, local_h_k, local_h_v
         local_h_q, local_h_k = self.position_embedding(local_q, local_k)
@@ -855,7 +860,6 @@ class ContextManager:
         print(f"context_manager.py::853 is called. Input length is {input_length}")
         for st in range(0, input_length, self.exc_block_size): 
             ed = min(st + self.exc_block_size, input_length)
-            print("context_manager.py::858 is called.")
             if use_chunk_topk and calc_cur_list[self._topk_calc_cur + 1] < ed:
                 # calculate topk and sync with host here
                 assert ed <= calc_cur_list[self._topk_calc_cur + 2]
@@ -867,6 +871,7 @@ class ContextManager:
             print("context_manager.py::867 is called.")
             kv_st = max(kv_length + st - input_length - self.n_local, 0)
             kv_ed = kv_length + ed - input_length
+            print(f"context_manager.py::kv_st is {kv_st}, kv_ed is {kv_ed}")
             chunk_o, local_score, block_score, block_k = self._append(
                 local_q[:, :, st:ed, :],
                 self.local_k[:, :, kv_st: kv_ed, :],
