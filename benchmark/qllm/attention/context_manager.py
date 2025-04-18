@@ -5,7 +5,7 @@ from torch.utils.cpp_extension import load
 from copy import deepcopy
 from .dot_production_attention import get_multi_stage_dot_production_attention
 import json 
-from .dot_product_topk import dot_product_topk_wrapper
+# from .dot_product_topk import dot_product_topk_wrapper
 
 attention_num = 0
 
@@ -134,7 +134,7 @@ class VectorTensor:
         self.hidden_size = hidden_size
         self.question = None
         self.question_weight = question_weight
-        self.cuda_topk = dot_product_topk_wrapper
+        # self.cuda_topk = dot_product_topk_wrapper
 
     def append_cache(self):
         new_cache_size = self.cache_size * 2
