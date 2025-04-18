@@ -30,9 +30,10 @@ class DotProductTopKFunction(torch.autograd.Function):
         query_q = query_q.contiguous() if query_q is not None else None
 
         # 调用CUDA扩展
-        indices, values = dot_product_topk_module.simple_topk(
-            data, query_c, query_q, question_weight, topk
-        )
+        # indices, values = dot_product_topk_module.dot_product_topk(
+        #     data, query_c, query_q, question_weight, topk
+        # )
+        indices, values = dot_product_topk_module.simple_topk(data,topk)
 
         # 转换回原始类型
         if orig_dtype == torch.bfloat16:
