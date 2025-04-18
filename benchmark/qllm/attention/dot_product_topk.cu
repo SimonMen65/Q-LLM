@@ -157,6 +157,99 @@ std::pair<torch::Tensor, torch::Tensor> dot_product_topk_cuda(
     return {topk_indices, topk_values};
 }
 
+template<typename scalar_t>
+__global__ void simple_topk_kernel(
+    const scalar_t* __restrict__ data,
+    int64_t* __restrict__ topk_indices,
+    scalar_t* __restrict__ topk_values,
+    int num_units,
+    int hidden_size,
+    int data_length,
+    int topk
+) {
+    const int unit_id = blockIdx.x;
+    const int thread_id = threadIdx.x;
+    const int data_idx = unit_id * data_length + thread_id;
+
+    // Check if the thread is within bounds
+    if (data_idx >= num_units * data_length) return;
+
+    scalar_t value = data[data_idx];
+
+    // Local array to store topk values and indices
+    __shared__ scalar_t shared_values[THREADS_PER_BLOCK];
+    __shared__ int64_t shared_indices[THREADS_PER_BLOCK];
+
+    shared_values[thread_id] = value;
+    shared_indices[thread_id] = data_idx;
+
+    __syncthreads();
+
+    // Perform a simple top-k selection (finding the maximum value in this block)
+    for (int i = 0; i < THREADS_PER_BLOCK; ++i) {
+        if (shared_values[i] > shared_values[thread_id]) {
+            scalar_t temp_value = shared_values[i];
+            int64_t temp_index = shared_indices[i];
+
+            shared_values[i] = shared_values[thread_id];
+            shared_indices[i] = shared_indices[thread_id];
+
+            shared_values[thread_id] = temp_value;
+            shared_indices[thread_id] = temp_index;
+        }
+    }
+
+    // Write the top-k values and indices to global memory
+    if (thread_id < topk) {
+        topk_values[unit_id * topk + thread_id] = shared_values[thread_id];
+        topk_indices[unit_id * topk + thread_id] = shared_indices[thread_id];
+    }
+}
+
+} // namespace
+
+std::pair<torch::Tensor, torch::Tensor> simple_topk_cuda(
+    torch::Tensor data,
+    int topk
+) {
+    TORCH_CHECK(data.dim() == 2, 
+        "Data must be 2D tensor, but got ", data.dim(), "D tensor instead");
+
+    const int num_units = data.size(0);
+    const int hidden_size = data.size(1);
+    const int data_length = data.size(0);
+
+    auto options = torch::TensorOptions()
+        .dtype(torch::kInt64)
+        .device(data.device());
+    auto topk_indices = torch::full({num_units, topk}, -1, options);
+
+    options = options.dtype(data.dtype());
+    auto topk_values = torch::full({num_units, topk}, 
+                                 -std::numeric_limits<float>::infinity(), options);
+
+    const dim3 blocks(num_units);
+
+    // Launch a simple topk kernel
+    AT_DISPATCH_FLOATING_TYPES(data.scalar_type(), "simple_topk", ([&] {
+        const int smem_size = THREADS_PER_BLOCK * sizeof(scalar_t);
+        
+        auto data_ptr = data.data_ptr<scalar_t>();
+        
+        simple_topk_kernel<scalar_t><<<blocks, THREADS_PER_BLOCK, smem_size>>>(
+            data_ptr,
+            topk_indices.data_ptr<int64_t>(),
+            topk_values.data_ptr<scalar_t>(),
+            num_units,
+            hidden_size,
+            data_length,
+            topk
+        );
+    }));
+    
+    return {topk_indices, topk_values};
+}
+
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-    m.def("dot_product_topk", &dot_product_topk_cuda, "Batched dot product topk");
+    m.def("simple_topk", &simple_topk_cuda, "Simplified topk kernel for testing");
 }
