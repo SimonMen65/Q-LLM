@@ -170,6 +170,11 @@ class VectorTensor:
     def get_topk(self, tensor: torch.Tensor, topk, method='dot'):
         assert tensor.dim() == 1 and tensor.size(0) == self.hidden_size
         print("self.data shape:", self.data.shape)  # 应该是 [num_data, hidden_size]
+
+        if self.length == 0:
+            print("[WARNING] Trying to get_topk from empty data!")
+            return [], []  # 返回空列表或抛出异常
+        
         X = self.data[:self.length]
         print("X shape:", X.shape)  # 应该是 [self.length, hidden_size]
 
