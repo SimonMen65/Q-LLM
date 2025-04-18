@@ -8,7 +8,7 @@ def qllm_forward(
     exc_block_size, fattn,
     question_weight,
     repr_topk: int = 1,
-    cache_strategy="lru",
+    cache_strategy="lru-s",
     score_decay=None,
     chunk_topk_calc=None,
     async_global_stream=True,
