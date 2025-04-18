@@ -448,6 +448,7 @@ class ContextManager:
     def calc_block_topk(
         self, global_h_q
     ):
+        print("DEBUG:: in calc_block_topk")
         if not self._use_chunk_topk:
             # if self.num_global_block <= self.topk:
             #     return [list(range(len(self.global_blocks[0]))) for _ in range(self.num_units)], global_h_q[0]
