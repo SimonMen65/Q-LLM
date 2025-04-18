@@ -457,7 +457,7 @@ class ContextManager:
             assert global_h_q.shape == (self.num_units, self.unit_size, self.dim_head)
             global_h_q = global_h_q.reshape(self.num_units, self.dim_head * self.unit_size)
             ret = []
-            print(f"calc_block_topk:: global_h_q has shape {self.global_h_q.shape}")
+            print(f"calc_block_topk:: global_h_q has shape {global_h_q.shape}")
             print(f"calc_block_topk::num_units is {self.num_units}")
             for u in range(self.num_units):
                 topk, score = self.block_k[u].get_topk(
