@@ -169,17 +169,17 @@ class VectorTensor:
 
     def get_topk(self, tensor: torch.Tensor, topk, method='dot'):
         assert tensor.dim() == 1 and tensor.size(0) == self.hidden_size
-        print("self.data shape:", self.data.shape)  # 应该是 [num_data, hidden_size]
+        print("get_topk::self.data shape:", self.data.shape)  # 应该是 [num_data, hidden_size]
 
         if self.length == 0:
-            print("[WARNING] Trying to get_topk from empty data!")
+            # print("[WARNING] Trying to get_topk from empty data!")
             return [], []  # 返回空列表或抛出异常
         
         X = self.data[:self.length]
         print("X shape:", X.shape)  # 应该是 [self.length, hidden_size]
 
         if method == 'dot':
-            data = self.get_data().unsqueeze(0)  # [1, num_data, hidden_size]
+            data = self.get_data()  # [1, num_data, hidden_size]
             query_c = tensor.unsqueeze(0)        # [1, hidden_size]
             
             if self.question is not None:
@@ -453,7 +453,6 @@ class ContextManager:
     def calc_block_topk(
         self, global_h_q
     ):
-        print("DEBUG:: in calc_block_topk")
         if not self._use_chunk_topk:
             # if self.num_global_block <= self.topk:
             #     return [list(range(len(self.global_blocks[0]))) for _ in range(self.num_units)], global_h_q[0]
@@ -462,9 +461,6 @@ class ContextManager:
             assert global_h_q.shape == (self.num_units, self.unit_size, self.dim_head)
             global_h_q = global_h_q.reshape(self.num_units, self.dim_head * self.unit_size)
             ret = []
-            print(f"calc_block_topk:: global_h_q has shape {global_h_q.shape}")
-            print(f"calc_block_topk::num_units is {self.num_units}")
-            print(f"calc_block_topk::block_k[0] has {len(self.block_k[0])}")
             for u in range(self.num_units):
                 topk, score = self.block_k[u].get_topk(
                     global_h_q[u], self.topk if self.topk < self.num_global_block else self.num_global_block, method='dot')
@@ -581,12 +577,10 @@ class ContextManager:
             get_score=True, sliding_window=self.n_local
         )
 
-        print(f"context_manager::_append::line 579")
         # calc topk global repr k and load cache
         with torch.cuda.stream(GLOBAL_STREAM):
             block_topk, block_score = self.calc_block_topk(global_q)
             
-            print(f"context_manager::_append::line 584")
             for u in range(self.num_units):
                 num_remove = len(self.cached_blocks[u]) - self.max_cached_block
                 for bidx in block_topk[u]:
@@ -596,7 +590,6 @@ class ContextManager:
                 # update cache
                 self.remove_lru_blocks(u, num_remove, block_topk[u])
 
-            print(f"context_manager::_append::line 594")
             if self.cache_strategy == "lru":
                 self.load_count += 1
                 for u in range(self.num_units):
@@ -610,7 +603,6 @@ class ContextManager:
             else:
                 raise ValueError
 
-            print(f"context_manager::_append::line 609")
             # get global_h_k, global_h_v, global_mask
             #    Beacuse exc_block_size <= n_local, no global_k, global_v used in global part
             global_h_q = global_q
