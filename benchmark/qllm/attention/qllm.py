@@ -28,7 +28,6 @@ def qllm_forward(
                     question_ids=None,
                     **kwargs,
     ):
-        print("qllm_forward::qllm_forward is called.")
         batch_size = query.size(0)
         len_q = query.size(1)
         len_k = key_value.size(1)
@@ -61,7 +60,6 @@ def qllm_forward(
                 question_weight,
                 question_ids=question_ids,
             )
-            print("qllm_forward::new ContextManager is called.")
 
 
         local_q, local_k, local_v = h_q, h_k, h_v

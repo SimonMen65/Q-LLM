@@ -812,6 +812,7 @@ class ContextManager:
         kv_length = self.local_k.size(-2)
 
         # append global remainder
+        print("context_manager.py::append global remainder is called.")
         with torch.cuda.stream(GLOBAL_STREAM):
             self._global_remainder_st = 0
             self._global_remainder_ed = self.global_remainder[0].size(-2)
@@ -837,6 +838,7 @@ class ContextManager:
                 global_q, self.n_local
             )
 
+        print("context_manager.py::use_chunk_topk is called.")
         use_chunk_topk = self.chunk_topk_calc is not None and input_length > 1
         self._use_chunk_topk = use_chunk_topk
         if use_chunk_topk:
