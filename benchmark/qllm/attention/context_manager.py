@@ -598,7 +598,6 @@ class ContextManager:
                     for bidx in block_topk[u]:
                         self.cached_blocks[u][bidx] = self.load_count
 
-            print(f"context_manager::_append::line 601")
             elif self.cache_strategy == "lru-s":
                 for u in range(self.num_units):
                     for bidx in block_topk[u]:
