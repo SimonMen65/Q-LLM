@@ -459,6 +459,7 @@ class ContextManager:
             ret = []
             print(f"calc_block_topk:: global_h_q has shape {global_h_q.shape}")
             print(f"calc_block_topk::num_units is {self.num_units}")
+            print(f"calc_block_topk::block_k[0] has {self.block_k[0].shape}")
             for u in range(self.num_units):
                 topk, score = self.block_k[u].get_topk(
                     global_h_q[u], self.topk if self.topk < self.num_global_block else self.num_global_block, method='dot')
