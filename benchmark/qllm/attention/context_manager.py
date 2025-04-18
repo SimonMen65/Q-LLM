@@ -581,6 +581,7 @@ class ContextManager:
         with torch.cuda.stream(GLOBAL_STREAM):
             block_topk, block_score = self.calc_block_topk(global_q)
             
+            print(f"context_manager::_append::line 584")
             for u in range(self.num_units):
                 num_remove = len(self.cached_blocks[u]) - self.max_cached_block
                 for bidx in block_topk[u]:
@@ -590,12 +591,14 @@ class ContextManager:
                 # update cache
                 self.remove_lru_blocks(u, num_remove, block_topk[u])
 
+            print(f"context_manager::_append::line 594")
             if self.cache_strategy == "lru":
                 self.load_count += 1
                 for u in range(self.num_units):
                     for bidx in block_topk[u]:
                         self.cached_blocks[u][bidx] = self.load_count
 
+            print(f"context_manager::_append::line 601")
             elif self.cache_strategy == "lru-s":
                 for u in range(self.num_units):
                     for bidx in block_topk[u]:
@@ -603,6 +606,7 @@ class ContextManager:
             else:
                 raise ValueError
 
+            print(f"context_manager::_append::line 609")
             # get global_h_k, global_h_v, global_mask
             #    Beacuse exc_block_size <= n_local, no global_k, global_v used in global part
             global_h_q = global_q
