@@ -576,6 +576,7 @@ class ContextManager:
             get_score=True, sliding_window=self.n_local
         )
 
+        print(f"context_manager::_append::line 579")
         # calc topk global repr k and load cache
         with torch.cuda.stream(GLOBAL_STREAM):
             block_topk, block_score = self.calc_block_topk(global_q)
@@ -607,6 +608,7 @@ class ContextManager:
             global_h_q = global_q
             global_h_k, global_h_v, global_sliding_window, global_block_map, global_block_num = self.get_global_hidden_and_mask(local_h_q.size(-2), block_topk)
 
+        print(f"context_manager::_append::line 611")
         if self.async_global_stream:
             torch.cuda.current_stream().wait_stream(GLOBAL_STREAM)
 
@@ -618,6 +620,7 @@ class ContextManager:
             complement_sliding_window=True
         )
 
+        print(f"context_manager::_append::line 623")
         o, score_list = attn.get_result()
         loc_score = score_list[0]
         glb_score = score_list[1]
@@ -625,6 +628,7 @@ class ContextManager:
         if self.async_global_stream:
             GLOBAL_STREAM.wait_stream(torch.cuda.current_stream())
 
+        print(f"context_manager::_append::line 631")
         # update global score
         with torch.cuda.stream(GLOBAL_STREAM):
             self.update_block_score(glb_score, global_block_map, global_block_num)
