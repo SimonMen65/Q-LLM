@@ -467,7 +467,7 @@ class ContextManager:
             print(f"calc_block_topk::block_k[0] has {len(self.block_k[0])}")
             for u in range(self.num_units):
                 topk, score = self.block_k[u].get_topk(
-                    global_h_q[u], self.topk if self.topk < self.num_global_block else self.num_global_block, method='cosine')
+                    global_h_q[u], self.topk if self.topk < self.num_global_block else self.num_global_block, method='dot')
                 ret.append(topk)
         
         else:
