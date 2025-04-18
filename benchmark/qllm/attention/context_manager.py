@@ -462,7 +462,7 @@ class ContextManager:
             print(f"calc_block_topk::block_k[0] has {len(self.block_k[0])}")
             for u in range(self.num_units):
                 topk, score = self.block_k[u].get_topk(
-                    global_h_q[u], self.topk if self.topk < self.num_global_block else self.num_global_block, method='dot')
+                    global_h_q[u], self.topk if self.topk < self.num_global_block else self.num_global_block, method='cosine')
                 ret.append(topk)
         
         else:
@@ -562,11 +562,7 @@ class ContextManager:
         self,
         local_q, local_k, local_v, global_q
     ):
-        print("[Debug] Entering _append()")
-        print(f"local_q shape: {local_q.shape}")
-        print(f"local_k shape: {local_k.shape}")
-        print(f"local_v shape: {local_v.shape}")
-        print(f"global_q shape: {global_q.shape}")
+
 
         # get local_h_q, local_h_k, local_h_v
         local_h_q, local_h_k = self.position_embedding(local_q, local_k)
@@ -615,7 +611,6 @@ class ContextManager:
             global_h_q = global_q
             global_h_k, global_h_v, global_sliding_window, global_block_map, global_block_num = self.get_global_hidden_and_mask(local_h_q.size(-2), block_topk)
 
-        print(f"context_manager::_append::line 611")
         if self.async_global_stream:
             torch.cuda.current_stream().wait_stream(GLOBAL_STREAM)
 
@@ -627,7 +622,6 @@ class ContextManager:
             complement_sliding_window=True
         )
 
-        print(f"context_manager::_append::line 623")
         o, score_list = attn.get_result()
         loc_score = score_list[0]
         glb_score = score_list[1]
@@ -635,7 +629,6 @@ class ContextManager:
         if self.async_global_stream:
             GLOBAL_STREAM.wait_stream(torch.cuda.current_stream())
 
-        print(f"context_manager::_append::line 631")
         # update global score
         with torch.cuda.stream(GLOBAL_STREAM):
             self.update_block_score(glb_score, global_block_map, global_block_num)
@@ -707,7 +700,6 @@ class ContextManager:
     def append_global(
         self, exc_length, kv_length, local_score, global_q
     ):
-        print("context_manager::append global is called")
 
         global_remainder_ed = self._global_remainder_ed + exc_length
         global_remainder_st = self._global_remainder_st
@@ -755,7 +747,6 @@ class ContextManager:
                     for u in range(self.num_units):
                         self.block_k[u].set_question(self.question[u])
         
-        print("context_manager::742 is called")
         while global_remainder_len - self.block_size >= self.n_local:
             global_remainder_len -= self.block_size
             for u in range(self.num_units):
@@ -854,7 +845,6 @@ class ContextManager:
                 global_q, self.n_local
             )
 
-        print("context_manager.py::use_chunk_topk is called.")
         use_chunk_topk = self.chunk_topk_calc is not None and input_length > 1
         self._use_chunk_topk = use_chunk_topk
         if use_chunk_topk:
@@ -879,10 +869,8 @@ class ContextManager:
                     self._cached_topk = self.get_batched_topk(global_q[:, :, calc_cur_list[self._topk_calc_cur]: calc_cur_list[self._topk_calc_cur + 1], :])
                 self._topk_cur = 0
 
-            print("context_manager.py::867 is called.")
             kv_st = max(kv_length + st - input_length - self.n_local, 0)
             kv_ed = kv_length + ed - input_length
-            print(f"context_manager.py::kv_st is {kv_st}, kv_ed is {kv_ed}")
             chunk_o, local_score, block_score, block_k = self._append(
                 local_q[:, :, st:ed, :],
                 self.local_k[:, :, kv_st: kv_ed, :],
@@ -891,7 +879,6 @@ class ContextManager:
             )
             o_list.append(chunk_o)
 
-            print("context_manager.py::878 is called.")
             # append global
             with torch.cuda.stream(GLOBAL_STREAM):
                 self.append_global(ed - st, kv_ed - kv_st, local_score, global_q)
