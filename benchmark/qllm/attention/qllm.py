@@ -9,7 +9,7 @@ def qllm_forward(
     question_weight,
     repr_topk: int = 1,
     cache_strategy="lru-s",
-    score_decay=None,
+    score_decay=0.1,
     chunk_topk_calc=None,
     async_global_stream=True,
     pin_memory=False,
