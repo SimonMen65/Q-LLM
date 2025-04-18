@@ -179,7 +179,7 @@ class VectorTensor:
         print("X shape:", X.shape)  # 应该是 [self.length, hidden_size]
 
         if method == 'dot':
-            data = self.get_data()  # [1, num_data, hidden_size]
+            data = self.get_data()  # [ num_data, hidden_size]
             query_c = tensor.unsqueeze(0)        # [1, hidden_size]
             
             if self.question is not None:
