@@ -852,9 +852,10 @@ class ContextManager:
 
         o_list = []
 
-        print("context_manager.py::853 is called.")
+        print(f"context_manager.py::853 is called. Input length is {input_length}")
         for st in range(0, input_length, self.exc_block_size): 
             ed = min(st + self.exc_block_size, input_length)
+            print("context_manager.py::858 is called.")
             if use_chunk_topk and calc_cur_list[self._topk_calc_cur + 1] < ed:
                 # calculate topk and sync with host here
                 assert ed <= calc_cur_list[self._topk_calc_cur + 2]
@@ -863,6 +864,7 @@ class ContextManager:
                     self._cached_topk = self.get_batched_topk(global_q[:, :, calc_cur_list[self._topk_calc_cur]: calc_cur_list[self._topk_calc_cur + 1], :])
                 self._topk_cur = 0
 
+            print("context_manager.py::867 is called.")
             kv_st = max(kv_length + st - input_length - self.n_local, 0)
             kv_ed = kv_length + ed - input_length
             chunk_o, local_score, block_score, block_k = self._append(
@@ -873,7 +875,7 @@ class ContextManager:
             )
             o_list.append(chunk_o)
 
-            print("context_manager.py::876 is called.")
+            print("context_manager.py::878 is called.")
             # append global
             with torch.cuda.stream(GLOBAL_STREAM):
                 self.append_global(ed - st, kv_ed - kv_st, local_score, global_q)
