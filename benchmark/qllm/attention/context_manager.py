@@ -691,6 +691,7 @@ class ContextManager:
     def append_global(
         self, exc_length, kv_length, local_score, global_q
     ):
+        print("context_manager::append global is called")
 
         global_remainder_ed = self._global_remainder_ed + exc_length
         global_remainder_st = self._global_remainder_st
@@ -738,6 +739,7 @@ class ContextManager:
                     for u in range(self.num_units):
                         self.block_k[u].set_question(self.question[u])
         
+        print("context_manager::742 is called")
         while global_remainder_len - self.block_size >= self.n_local:
             global_remainder_len -= self.block_size
             for u in range(self.num_units):
@@ -774,7 +776,6 @@ class ContextManager:
         local_q, local_k, local_v,
         global_q, global_k, global_v
     ):
-        print("context_manager.py::append is called.")
         batch_size = local_q.size(0)
         input_length = local_q.size(-2)
 
@@ -812,7 +813,6 @@ class ContextManager:
         kv_length = self.local_k.size(-2)
 
         # append global remainder
-        print("context_manager.py::append global remainder is called.")
         with torch.cuda.stream(GLOBAL_STREAM):
             self._global_remainder_st = 0
             self._global_remainder_ed = self.global_remainder[0].size(-2)
@@ -852,6 +852,7 @@ class ContextManager:
 
         o_list = []
 
+        print("context_manager.py::853 is called.")
         for st in range(0, input_length, self.exc_block_size): 
             ed = min(st + self.exc_block_size, input_length)
             if use_chunk_topk and calc_cur_list[self._topk_calc_cur + 1] < ed:
