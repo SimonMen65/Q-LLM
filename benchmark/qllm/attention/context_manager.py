@@ -873,7 +873,7 @@ class ContextManager:
             )
             o_list.append(chunk_o)
 
-
+            print("context_manager.py::876 is called.")
             # append global
             with torch.cuda.stream(GLOBAL_STREAM):
                 self.append_global(ed - st, kv_ed - kv_st, local_score, global_q)
