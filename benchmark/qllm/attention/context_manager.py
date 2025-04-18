@@ -888,6 +888,8 @@ class ContextManager:
         # attention_num += 1
 
         self.length += input_length
+        print(f"ContextManager::append::Length is {self.length}")
+        print(f"ContextManager::append::block_k length is {len(self.block_k)}")
 
         # update local and global tensor
         if self.local_k.size(-2) >= self.n_local:
