@@ -28,6 +28,7 @@ def qllm_forward(
                     question_ids=None,
                     **kwargs,
     ):
+        print("qllm_forward::qllm_forward is called.")
         batch_size = query.size(0)
         len_q = query.size(1)
         len_k = key_value.size(1)
