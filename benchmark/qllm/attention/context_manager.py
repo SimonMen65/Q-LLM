@@ -774,6 +774,7 @@ class ContextManager:
         local_q, local_k, local_v,
         global_q, global_k, global_v
     ):
+        print("context_manager.py::append is called.")
         batch_size = local_q.size(0)
         input_length = local_q.size(-2)
 

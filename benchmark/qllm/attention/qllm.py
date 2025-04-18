@@ -61,6 +61,7 @@ def qllm_forward(
                 question_weight,
                 question_ids=question_ids,
             )
+            print("qllm_forward::new ContextManager is called.")
 
 
         local_q, local_k, local_v = h_q, h_k, h_v
