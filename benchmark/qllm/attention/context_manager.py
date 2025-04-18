@@ -169,14 +169,14 @@ class VectorTensor:
 
     def get_topk(self, tensor: torch.Tensor, topk, method='dot'):
         assert tensor.dim() == 1 and tensor.size(0) == self.hidden_size
-        print("get_topk::self.data shape:", self.data.shape)  # 应该是 [num_data, hidden_size]
+        # print("get_topk::self.data shape:", self.data.shape)  # 应该是 [num_data, hidden_size]
 
         if self.length == 0:
             # print("[WARNING] Trying to get_topk from empty data!")
             return [], []  # 返回空列表或抛出异常
         
         X = self.data[:self.length]
-        print("X shape:", X.shape)  # 应该是 [self.length, hidden_size]
+        # print("X shape:", X.shape)  # 应该是 [self.length, hidden_size]
 
         if method == 'dot':
             data = self.get_data()  # [ num_data, hidden_size]
@@ -855,7 +855,7 @@ class ContextManager:
 
         o_list = []
 
-        print(f"context_manager.py::853 is called. Input length is {input_length}")
+        # print(f"context_manager.py::853 is called. Input length is {input_length}")
         for st in range(0, input_length, self.exc_block_size): 
             ed = min(st + self.exc_block_size, input_length)
             if use_chunk_topk and calc_cur_list[self._topk_calc_cur + 1] < ed:
@@ -894,8 +894,8 @@ class ContextManager:
         # attention_num += 1
 
         self.length += input_length
-        print(f"ContextManager::append::Length is {self.length}")
-        print(f"ContextManager::append::block_k length is {len(self.block_k)}")
+        # print(f"ContextManager::append::Length is {self.length}")
+        # print(f"ContextManager::append::block_k length is {len(self.block_k)}")
 
         # update local and global tensor
         if self.local_k.size(-2) >= self.n_local:
