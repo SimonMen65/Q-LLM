@@ -1,10 +1,14 @@
 import torch
 from typing import Optional, Tuple
+import torch.nn.functional as F
+from torch.utils.cpp_extension import load
 from copy import deepcopy
 from .dot_production_attention import get_multi_stage_dot_production_attention
 import json 
+# from .dot_product_topk import dot_product_topk_wrapper
 
 attention_num = 0
+
 
 class CudaCache:
     def __init__(self, num_units, unit_size, dtype):
@@ -130,6 +134,7 @@ class VectorTensor:
         self.hidden_size = hidden_size
         self.question = None
         self.question_weight = question_weight
+        # self.cuda_topk = dot_product_topk_wrapper
 
     def append_cache(self):
         new_cache_size = self.cache_size * 2
@@ -162,18 +167,67 @@ class VectorTensor:
         return self.data[:self.length, ...]
 
 
-    def get_topk(self, tensor: torch.Tensor, topk): # inner product
+    def get_topk(self, tensor: torch.Tensor, topk, method='dot'):
         assert tensor.dim() == 1 and tensor.size(0) == self.hidden_size
-        # assert self.question is not None
-        logits_c = torch.matmul(self.data[:self.length], tensor[:, None]).squeeze(dim=-1)
-        ##################################################################
-        # change here
-        if self.question is not None:
-            logits_q = torch.matmul(self.data[:self.length], self.question[:, None]).squeeze(dim=-1)
-            logits =  logits_c + self.question_weight * logits_q
+        # print("get_topk::self.data shape:", self.data.shape)  # 应该是 [num_data, hidden_size]
+
+        if self.length == 0:
+            # print("[WARNING] Trying to get_topk from empty data!")
+            return [], []  # 返回空列表或抛出异常
+        
+        X = self.data[:self.length]
+        # print("X shape:", X.shape)  # 应该是 [self.length, hidden_size]
+
+        if method == 'dot':
+            data = self.get_data()  # [ num_data, hidden_size]
+            query_c = tensor.unsqueeze(0)        # [1, hidden_size]
+            
+            if self.question is not None:
+                query_q = self.question.unsqueeze(0)  # [1, hidden_size]
+            else:
+                query_q = None
+                
+            indices, scores = self.cuda_topk(
+                data,
+                query_c,
+                query_q,
+                self.question_weight,
+                topk
+            )
+            
+            return indices.squeeze(0).tolist(), scores.squeeze(0).tolist()  # 返回单unit的列表
+
+        elif method == 'cosine':
+            logits = F.cosine_similarity(X, tensor.unsqueeze(0), dim=1)
+
+        elif method == 'l2':
+            logits = -torch.norm(X - tensor.unsqueeze(0), dim=1)
+
+        elif method == 'normalized_l2':
+            norm_sum = X.norm(dim=1) + tensor.norm()
+            logits = -torch.norm(X - tensor.unsqueeze(0), dim=1) / (norm_sum + 1e-6)
+
+        elif method == 'dot_minus_l2':
+            logits = torch.matmul(X, tensor) - torch.norm(X - tensor.unsqueeze(0), dim=1)
+
+        elif method == 'angular':
+            cos = F.cosine_similarity(X, tensor.unsqueeze(0), dim=1).clamp(-1 + 1e-6, 1 - 1e-6)
+            logits = -torch.acos(cos)
+
+        elif method == 'pearson':
+            x_mean = X.mean(dim=1, keepdim=True)
+            y_mean = tensor.mean()
+            x_std = X.std(dim=1, unbiased=False)
+            y_std = tensor.std(unbiased=False)
+            logits = ((X - x_mean) @ (tensor - y_mean)) / (x_std * y_std * X.shape[1] + 1e-6)
+
         else:
-            logits = logits_c
-        assert logits.dim() == 1 and logits.size(0) == self.length
+            raise ValueError(f"Unknown method: {method}")
+
+        if self.question is not None:
+            logits_q = torch.matmul(X, self.question[:, None]).squeeze(dim=-1)
+            logits += self.question_weight * logits_q
+
         return logits.topk(topk, dim=0).indices.cpu().tolist(), logits.cpu().tolist()
 
     def set_question(self, question):
@@ -409,7 +463,7 @@ class ContextManager:
             ret = []
             for u in range(self.num_units):
                 topk, score = self.block_k[u].get_topk(
-                    global_h_q[u], self.topk if self.topk < self.num_global_block else self.num_global_block)
+                    global_h_q[u], self.topk if self.topk < self.num_global_block else self.num_global_block, method='cosine')
                 ret.append(topk)
         
         else:
@@ -417,7 +471,7 @@ class ContextManager:
 
         return ret, score
 
-
+    
     def get_global_hidden_and_mask(
         self, len_q, block_topk
     ):
@@ -485,7 +539,6 @@ class ContextManager:
         global_h_v = global_h_v[:, :, :ed, :]
         return global_h_k, global_h_v, sliding_window, global_block_map, block_num
 
-
     def update_block_score(
         self, global_score: torch.FloatTensor, global_block_map, global_block_num
     ):
@@ -510,6 +563,7 @@ class ContextManager:
         self,
         local_q, local_k, local_v, global_q
     ):
+
 
         # get local_h_q, local_h_k, local_h_v
         local_h_q, local_h_k = self.position_embedding(local_q, local_k)
@@ -720,7 +774,7 @@ class ContextManager:
 
         self._global_remainder_ed = global_remainder_ed
         self._global_remainder_st = global_remainder_st
-
+    
     def append(
         self,
         local_q, local_k, local_v,
@@ -801,6 +855,7 @@ class ContextManager:
 
         o_list = []
 
+        # print(f"context_manager.py::853 is called. Input length is {input_length}")
         for st in range(0, input_length, self.exc_block_size): 
             ed = min(st + self.exc_block_size, input_length)
             if use_chunk_topk and calc_cur_list[self._topk_calc_cur + 1] < ed:
@@ -821,7 +876,6 @@ class ContextManager:
             )
             o_list.append(chunk_o)
 
-
             # append global
             with torch.cuda.stream(GLOBAL_STREAM):
                 self.append_global(ed - st, kv_ed - kv_st, local_score, global_q)
@@ -840,6 +894,8 @@ class ContextManager:
         # attention_num += 1
 
         self.length += input_length
+        # print(f"ContextManager::append::Length is {self.length}")
+        # print(f"ContextManager::append::block_k length is {len(self.block_k)}")
 
         # update local and global tensor
         if self.local_k.size(-2) >= self.n_local:

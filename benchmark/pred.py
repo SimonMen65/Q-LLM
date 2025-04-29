@@ -13,6 +13,7 @@ from qllm.utils import patch_hf, GreedySearch, patch_model_center
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from qllm.utils.extract_question import extract_question_id
 import time 
+import torch.profiler
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -218,6 +219,7 @@ def get_pred(
     verbose: bool = False, out_path: str = None,
     model_type: str = None,
 ):
+
     preds = []
     data = list(data)
 
@@ -425,6 +427,8 @@ if __name__ == '__main__':
             args.verbose, out_path,
             args.model.type,
         )
+        peak_memory = torch.cuda.max_memory_allocated(device='cuda')
+        print(f"[Memory] Peak Memory Allocated: {peak_memory / 1024 / 1024:.2f} MB")
 
         peak_memory = torch.cuda.max_memory_allocated(device='cuda')
         print(f"[Memory] Peak Memory Allocated: {peak_memory / 1024 / 1024:.2f} MB")
